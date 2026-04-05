@@ -165,15 +165,26 @@ Return ONLY valid JSON (no markdown, no backticks):
 #   Pollinations.ai でシーン画像生成（無料）
 # ═══════════════════════════════════════════════
 def generate_scene_image(prompt: str, uid: str, tmpdir: str) -> tuple[str, str]:
+    import time
     seed = int(uid[:6], 16) % 100000
     encoded = urllib.parse.quote(prompt)
     url = f"https://image.pollinations.ai/prompt/{encoded}?width=800&height=400&nologo=true&seed={seed}"
-    res = requests.get(url, timeout=60)
-    res.raise_for_status()
     filename = f"ep_{uid}_scene.jpg"
     filepath = str(Path(tmpdir) / filename)
-    with open(filepath, "wb") as f:
-        f.write(res.content)
+    for attempt in range(4):
+        try:
+            if attempt > 0:
+                wait = 20 * attempt
+                print(f"    ⏳ {wait}秒待機してリトライ ({attempt}/3)...")
+                time.sleep(wait)
+            res = requests.get(url, timeout=90)
+            res.raise_for_status()
+            with open(filepath, "wb") as f:
+                f.write(res.content)
+            return filepath, filename
+        except Exception as e:
+            if attempt == 3:
+                raise e
     return filepath, filename
 
 # ═══════════════════════════════════════════════
@@ -425,6 +436,7 @@ def main():
                 content = generate_content(client, phrase)
 
                 print("  🖼️  シーン画像を生成中...")
+                import time; time.sleep(5)
                 img_path, img_filename = generate_scene_image(content["image_prompt"], uid, tmpdir)
                 all_media.append(img_path)
 
