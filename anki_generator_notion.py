@@ -259,11 +259,7 @@ def build_front(audio_list, content):
     lvl = content.get("level", "intermediate")
     style = LEVEL_STYLE.get(lvl, LEVEL_STYLE["intermediate"])
     buttons = build_voice_buttons_front(audio_list)
-    # 最初の音声ファイルを自動再生
-    auto_file = audio_list[0]["filename"] if audio_list else ""
-    auto_play = f"[sound:{auto_file}]" if auto_file else ""
     return f"""<div class="ep-front">
-{auto_play}
 <span class="ep-badge" style="{style}">{lvl.upper()}</span>
 <div class="ep-label">&#127925; Listen &amp; recall</div>
 <div class="ep-vgrid">{buttons}</div>
