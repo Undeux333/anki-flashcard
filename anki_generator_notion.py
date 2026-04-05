@@ -15,7 +15,7 @@ import genanki
 GEMINI_API_KEY     = os.environ.get("GEMINI_API_KEY", "")
 NOTION_TOKEN       = os.environ.get("NOTION_TOKEN", "")
 NOTION_DATABASE_ID = os.environ.get("NOTION_DATABASE_ID", "")
-GEMINI_MODEL       = "gemini-2.0-flash-lite"
+GEMINI_MODEL       = "gemini-3.1-flash-lite"
 TTS_VOICE          = "en-US-AndrewNeural"
 TTS_RATE           = "-12%"
 NOTION_VERSION     = "2022-06-28"
