@@ -25,16 +25,42 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Generate Anki cards
+        id: generate
         env:
           GEMINI_API_KEY:     ${{ secrets.GEMINI_API_KEY }}
           NOTION_TOKEN:       ${{ secrets.NOTION_TOKEN }}
           NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
-        run: python anki_generator_notion.py
+        run: |
+          python anki_generator_notion.py
+          # .apkg が生成されたか確認
+          if ls output/*.apkg 1>/dev/null 2>&1; then
+            echo "apkg_exists=true" >> $GITHUB_OUTPUT
+            echo "apkg_path=$(ls output/*.apkg | head -1)" >> $GITHUB_OUTPUT
+          else
+            echo "apkg_exists=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Upload .apkg as artifact
+        if: steps.generate.outputs.apkg_exists == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: anki-cards-${{ github.run_number }}
           path: output/*.apkg
           if-no-files-found: ignore
           retention-days: 30
+
+      - name: Notify Android via ntfy
+        if: steps.generate.outputs.apkg_exists == 'true'
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          RUN_NUMBER: ${{ github.run_number }}
+          REPO:       ${{ github.repository }}
+        run: |
+          ARTIFACT_URL="https://github.com/${REPO}/actions/runs/${{ github.run_id }}"
+          curl -s \
+            -H "Title: Anki カード生成完了" \
+            -H "Priority: default" \
+            -H "Tags: white_check_mark" \
+            -H "Click: ${ARTIFACT_URL}" \
+            -d "新しいAnkiカードが生成されました。タップしてダウンロードページを開いてください。(Run #${RUN_NUMBER})" \
+            "https://ntfy.sh/${NTFY_TOPIC}"
