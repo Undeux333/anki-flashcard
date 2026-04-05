@@ -67,7 +67,7 @@ def get_pending_phrases():
         "filter": {
             "or": [
                 {"property": PROP_STATUS, "select": {"is_empty": True}},
-                {"property": PROP_STATUS, "select": {"equals": STATUS_PENDING}}
+                {"property": PROP_STATUS, "select": {"equals": STATUS_ERROR}}
             ]
         }
     }
