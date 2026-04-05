@@ -271,10 +271,10 @@ def build_back(audio_list, conv_files, content):
             text_hl = highlight_phrase(ln["text"], content["phrase_display"])
             lines_html += f'<p><span class="{cls}">{name}:</span> {text_hl}</p>'
 
-        convs_html += f"""<div class="ep-conv-block">
+        convs_html += f"""<div class="ep-conv-block">[sound:{conv_filename}]
   <div class="ep-conv-header">
     <div class="ep-conv-setting">&#128205; {conv['setting']}</div>
-    <div class="ep-conv-play-btn">[sound:{conv_filename}] &#9654;</div>
+    <div class="ep-conv-play-btn">&#9654; Play</div>
   </div>
   <div class="ep-lines">{lines_html}</div>
 </div>"""
@@ -301,9 +301,13 @@ def build_back(audio_list, conv_files, content):
     # 音声ボタン（一番下）
     buttons = build_voice_buttons(audio_list)
 
+    # audio_textのフレーズをハイライト
+    audio_text_hl = highlight_phrase(content["audio_text"], content["phrase_display"])
+
     return f"""<div class="ep-back">
 <div class="ep-inner">
 <span class="ep-badge" style="{style}">{lvl.upper()}</span>
+<div class="ep-audio-sentence-back">{audio_text_hl}</div>
 
 <div class="ep-label">&#128161; What it actually means</div>
 <div class="ep-box ep-meaning">{content['simple_meaning']}</div>
@@ -361,6 +365,7 @@ CARD_CSS = """
 .ep-vname { font-size: 12px; font-weight: 700; color: #2d3748; }
 .ep-vdesc { font-size: 10px; color: #a0aec0; }
 .ep-box { border-radius: 0 8px 8px 0; padding: 9px 12px; font-size: 13px; }
+.ep-audio-sentence-back { font-size: 15px; line-height: 1.7; color: #2d3748; text-align: center; margin: 4px 0 14px; padding: 10px 14px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; }
 .ep-meaning { background: #ebf4ff; border-left: 3px solid #4299e1; }
 .ep-conv-block { background: #f0fff4; border-left: 3px solid #48bb78; border-radius: 0 8px 8px 0; margin-bottom: 10px; overflow: hidden; }
 .ep-conv-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px 6px; border-bottom: 1px solid #c6f6d5; }
