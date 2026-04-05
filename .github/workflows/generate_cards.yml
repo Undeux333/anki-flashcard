@@ -58,9 +58,9 @@ jobs:
         run: |
           ARTIFACT_URL="https://github.com/${REPO}/actions/runs/${{ github.run_id }}"
           curl -s \
-            -H "Title: Anki カード生成完了" \
+            -H "Title: Anki cards ready" \
             -H "Priority: default" \
             -H "Tags: white_check_mark" \
             -H "Click: ${ARTIFACT_URL}" \
-            -d "新しいAnkiカードが生成されました。タップしてダウンロードページを開いてください。(Run #${RUN_NUMBER})" \
+            -d "New Anki cards have been generated. Tap to open the download page.(Run #${RUN_NUMBER})" \
             "https://ntfy.sh/${NTFY_TOPIC}"
