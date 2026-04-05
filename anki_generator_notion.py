@@ -17,7 +17,7 @@ GEMINI_API_KEY     = os.environ.get("GEMINI_API_KEY", "")
 NOTION_TOKEN       = os.environ.get("NOTION_TOKEN", "")
 NOTION_DATABASE_ID = os.environ.get("NOTION_DATABASE_ID", "")
 GEMINI_MODEL       = "gemini-3.1-flash-lite-preview"
-TTS_RATE           = "0%"
+TTS_RATE           = "+0%"
 NOTION_VERSION     = "2022-06-28"
 OUTPUT_DIR         = Path("output")
 
