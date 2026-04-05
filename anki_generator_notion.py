@@ -146,20 +146,30 @@ Return ONLY valid JSON (no markdown, no backticks):
   "level": "beginner or intermediate or advanced"
 }}"""
 
-    response = client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            temperature=0.8
-        )
-    )
-    text = response.text.strip()
-    if text.startswith("```"):
-        text = text.split("```")[1]
-        if text.startswith("json"):
-            text = text[4:]
-    return json.loads(text.strip())
+    import time
+    for attempt in range(4):
+        try:
+            if attempt > 0:
+                wait = 30 * attempt
+                print(f"    ⏳ Gemini混雑 — {wait}秒待機してリトライ ({attempt}/3)...")
+                time.sleep(wait)
+            response = client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    temperature=0.8
+                )
+            )
+            text = response.text.strip()
+            if text.startswith("```"):
+                text = text.split("```")[1]
+                if text.startswith("json"):
+                    text = text[4:]
+            return json.loads(text.strip())
+        except Exception as e:
+            if attempt == 3:
+                raise e
 
 # ═══════════════════════════════════════════════
 #   Pollinations.ai でシーン画像生成（無料）
