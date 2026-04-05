@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Anki Flashcard Generator — Notion + GitHub Actions 版
-Notion DB の「⏳ 未処理」フレーズを取得 → Gemini + edge-tts → .apkg 生成
+Notion DB の「Pending」フレーズを取得 → Gemini + edge-tts → .apkg 生成
 """
 
 import os, json, hashlib, asyncio, tempfile, requests
@@ -12,32 +12,24 @@ from google.genai import types
 import edge_tts
 import genanki
 
-# ═══════════════════════════════════════════════
-#   ⚙️  設定（環境変数から取得）
-# ═══════════════════════════════════════════════
-GEMINI_API_KEY      = os.environ.get("GEMINI_API_KEY", "")
-NOTION_TOKEN        = os.environ.get("NOTION_TOKEN", "")
-NOTION_DATABASE_ID  = os.environ.get("NOTION_DATABASE_ID", "")
-GEMINI_MODEL        = "gemini-3.1-flash-lite"
-TTS_VOICE           = "en-US-AndrewNeural"
-TTS_RATE            = "-12%"
-NOTION_VERSION      = "2022-06-28"
-OUTPUT_DIR          = Path("output")
+GEMINI_API_KEY     = os.environ.get("GEMINI_API_KEY", "")
+NOTION_TOKEN       = os.environ.get("NOTION_TOKEN", "")
+NOTION_DATABASE_ID = os.environ.get("NOTION_DATABASE_ID", "")
+GEMINI_MODEL       = "gemini-2.0-flash-lite"
+TTS_VOICE          = "en-US-AndrewNeural"
+TTS_RATE           = "-12%"
+NOTION_VERSION     = "2022-06-28"
+OUTPUT_DIR         = Path("output")
 
-# Notion プロパティ名（DBの列名と一致させる）
-PROP_PHRASE  = "フレーズ"
-PROP_STATUS  = "ステータス"
-STATUS_PENDING = "⏳ 未処理"
-STATUS_DONE    = "✅ 完了"
-STATUS_ERROR   = "❌ エラー"
+PROP_PHRASE    = "Phrase"
+PROP_STATUS    = "Status"
+STATUS_PENDING = "Pending"
+STATUS_DONE    = "Done"
+STATUS_ERROR   = "Error"
 
-# Anki 固定ID（同じデッキ・モデルを維持するため変更しない）
 ANKI_MODEL_ID = 1607392319
 ANKI_DECK_ID  = 2059400110
 
-# ═══════════════════════════════════════════════
-#   Notion API
-# ═══════════════════════════════════════════════
 def notion_headers():
     return {
         "Authorization": f"Bearer {NOTION_TOKEN}",
@@ -47,18 +39,11 @@ def notion_headers():
 
 def get_pending_phrases():
     url = f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}/query"
-    payload = {
-        "filter": {
-            "property": PROP_STATUS,
-            "select": {"equals": STATUS_PENDING}
-        }
-    }
+    payload = {"filter": {"property": PROP_STATUS, "select": {"equals": STATUS_PENDING}}}
     res = requests.post(url, headers=notion_headers(), json=payload, timeout=15)
     res.raise_for_status()
-    data = res.json()
-
     results = []
-    for page in data.get("results", []):
+    for page in res.json().get("results", []):
         try:
             title_arr = page["properties"][PROP_PHRASE]["title"]
             if not title_arr:
@@ -75,10 +60,7 @@ def update_notion_status(page_id, status):
     payload = {"properties": {PROP_STATUS: {"select": {"name": status}}}}
     requests.patch(url, headers=notion_headers(), json=payload, timeout=10)
 
-# ═══════════════════════════════════════════════
-#   Gemini コンテンツ生成
-# ═══════════════════════════════════════════════
-def generate_content(model, phrase: str) -> dict:
+def generate_content(client, phrase: str) -> dict:
     prompt = f"""You are a professional American English teacher creating a detailed flashcard.
 
 Target phrase or expression: "{phrase}"
@@ -97,27 +79,18 @@ Return ONLY a valid JSON object (no markdown, no backticks) with this exact stru
       {{"speaker": "B", "text": "...", "note": ""}}
     ]
   }},
-  "situations": [
-    "Specific situation 1",
-    "Specific situation 2",
-    "Specific situation 3"
-  ],
-  "paraphrases": [
-    "Alternative phrase 1 with brief note",
-    "Alternative phrase 2 with brief note"
-  ],
+  "situations": ["Specific situation 1", "Specific situation 2", "Specific situation 3"],
+  "paraphrases": ["Alternative phrase 1 with brief note", "Alternative phrase 2 with brief note"],
   "tips": "1-2 critical tips about register, common mistakes, or American culture.",
   "level": "beginner or intermediate or advanced"
 }}"""
 
-    response = client.models.generate_content
-    (
-    model=GEMINI_MODEL,
-    contents=prompt,
-    config=types.GenerateContentConfig
-        (
-        response_mime_type="application/json",
-        temperature=0.7
+    response = client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            temperature=0.7
         )
     )
     text = response.text.strip()
@@ -127,9 +100,6 @@ Return ONLY a valid JSON object (no markdown, no backticks) with this exact stru
             text = text[4:]
     return json.loads(text.strip())
 
-# ═══════════════════════════════════════════════
-#   edge-tts 音声生成
-# ═══════════════════════════════════════════════
 async def _tts(text, voice, rate, path):
     communicate = edge_tts.Communicate(text, voice=voice, rate=rate)
     await communicate.save(path)
@@ -140,9 +110,6 @@ def generate_audio(text: str, uid: str, tmpdir: str) -> tuple[str, str]:
     asyncio.run(_tts(text, TTS_VOICE, TTS_RATE, filepath))
     return filepath, filename
 
-# ═══════════════════════════════════════════════
-#   HTML ビルダー
-# ═══════════════════════════════════════════════
 LEVEL_STYLE = {
     "beginner":     "background:#e8f5e9;color:#2e7d32",
     "intermediate": "background:#fff8e1;color:#f57f17",
@@ -193,17 +160,9 @@ CARD_CSS = """
   background: #f4f6f9; min-height: 100vh; padding: 20px 16px;
 }
 .ep-front, .ep-back { max-width: 560px; margin: 0 auto; }
-.ep-badge {
-  display: inline-block; font-size: 11px; font-weight: 700;
-  letter-spacing: 1.2px; padding: 3px 12px; border-radius: 20px; margin-bottom: 20px;
-}
+.ep-badge { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: 1.2px; padding: 3px 12px; border-radius: 20px; margin-bottom: 20px; }
 .ep-audio-area { display: flex; flex-direction: column; align-items: center; padding: 28px 0 20px; }
-.ep-play {
-  width: 76px; height: 76px; border-radius: 50%;
-  background: #ffffff; border: 1px solid #dce1ea;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 28px; color: #4a5568;
-}
+.ep-play { width: 76px; height: 76px; border-radius: 50%; background: #ffffff; border: 1px solid #dce1ea; display: flex; align-items: center; justify-content: center; font-size: 28px; color: #4a5568; }
 .ep-hint { font-size: 12px; color: #8a9ab5; margin-top: 10px; }
 .ep-phrase { font-size: 24px; font-weight: 700; color: #2b6cb0; text-align: center; margin-bottom: 16px; }
 .ep-label { font-size: 11px; font-weight: 700; color: #8a9ab5; letter-spacing: 1px; text-transform: uppercase; margin: 14px 0 6px; }
@@ -222,9 +181,6 @@ CARD_CSS = """
 p { margin-bottom: 5px; }
 """
 
-# ═══════════════════════════════════════════════
-#   Anki モデル・デッキ
-# ═══════════════════════════════════════════════
 def build_anki_model():
     return genanki.Model(
         ANKI_MODEL_ID,
@@ -234,22 +190,15 @@ def build_anki_model():
         css=CARD_CSS
     )
 
-# ═══════════════════════════════════════════════
-#   メイン処理
-# ═══════════════════════════════════════════════
 def main():
-    # 環境変数チェック
     for var in ["GEMINI_API_KEY", "NOTION_TOKEN", "NOTION_DATABASE_ID"]:
         if not os.environ.get(var):
             print(f"❌ 環境変数 {var} が設定されていません")
             return
 
     OUTPUT_DIR.mkdir(exist_ok=True)
-
-    # Gemini 初期化
     client = genai.Client(api_key=GEMINI_API_KEY)
 
-    # Notion から未処理フレーズを取得
     print("📋 Notion から未処理フレーズを取得中...")
     try:
         pending = get_pending_phrases()
@@ -258,27 +207,27 @@ def main():
         return
 
     if not pending:
-        print("✅ 未処理のフレーズはありません。処理をスキップします。")
+        print("✅ 未処理のフレーズはありません。")
         return
 
     print(f"   {len(pending)} 件見つかりました\n")
 
     anki_model = build_anki_model()
-    deck  = genanki.Deck(ANKI_DECK_ID, "🇺🇸 English Phrases")
+    deck = genanki.Deck(ANKI_DECK_ID, "🇺🇸 English Phrases")
     notes = []
     audio_files = []
     ok = ng = 0
 
     with tempfile.TemporaryDirectory() as tmpdir:
         for i, item in enumerate(pending, 1):
-            phrase   = item["phrase"]
-            page_id  = item["page_id"]
-            uid      = hashlib.md5(phrase.lower().encode()).hexdigest()[:10]
+            phrase  = item["phrase"]
+            page_id = item["page_id"]
+            uid     = hashlib.md5(phrase.lower().encode()).hexdigest()[:10]
             print(f"[{i}/{len(pending)}] 📝 {phrase}")
 
             try:
                 print("  ⏳ Gemini でコンテンツ生成中...")
-                content = generate_content(gemini_model, phrase)
+                content = generate_content(client, phrase)
 
                 print("  🎙️  edge-tts で音声生成中...")
                 audio_path, audio_filename = generate_audio(content["audio_text"], uid, tmpdir)
