@@ -61,6 +61,7 @@ jobs:
             -T "$APKG_FILE" \
             -H "Title: Anki upload" \
             -H "Filename: anki_cards.apkg" \
+            -H "Content-Type: application/octet-stream" \
             "https://ntfy.sh/${NTFY_TOPIC}")
 
           echo "ntfy response: $RESPONSE"
