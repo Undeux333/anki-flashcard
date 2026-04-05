@@ -2,3 +2,4 @@ google-genai
 edge-tts
 requests
 genanki
+pydub
