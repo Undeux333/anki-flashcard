@@ -32,15 +32,15 @@ ANKI_DECK_ID  = 2059400110
 
 VOICES = [
     {"id": "steffan",     "name": "Steffan",     "voice": "en-US-SteffanNeural",         "gender": "male",   "desc": "casual"},
-    {"id": "christopher", "name": "Christopher", "voice": "en-US-ChristopherNeural",     "gender": "male",   "desc": "deep"},
+    {"id": "brian",       "name": "Brian",       "voice": "en-US-BrianNeural",           "gender": "male",   "desc": "deep"},
     {"id": "ava",         "name": "Ava",         "voice": "en-US-AvaMultilingualNeural", "gender": "female", "desc": "natural"},
     {"id": "jenny",       "name": "Jenny",       "voice": "en-US-JennyNeural",           "gender": "female", "desc": "clear"},
     {"id": "ana",         "name": "Ana",         "voice": "en-US-AnaNeural",             "gender": "female", "desc": "bright"},
 ]
 
 CONV_VOICES = {
-    "female": "en-US-JennyNeural",
-    "male":   "en-US-ChristopherNeural",
+    "female": "en-US-AvaMultilingualNeural",
+    "male":   "en-US-BrianNeural",
 }
 
 def notion_headers():
@@ -208,10 +208,20 @@ def generate_all_audio(text: str, uid: str, tmpdir: str) -> list[dict]:
     return results
 
 def generate_conversation_audio(conv: dict, uid: str, idx: int, tmpdir: str) -> tuple[str, str]:
-    voice_a = CONV_VOICES.get(conv["speaker_a"]["gender"], CONV_VOICES["female"])
-    voice_b = CONV_VOICES.get(conv["speaker_b"]["gender"], CONV_VOICES["male"])
-    silence = AudioSegment.silent(duration=600)
-    combined = AudioSegment.silent(duration=200)
+    # A/B で声を固定。両方同性の場合は別の声を使用
+    gender_a = conv["speaker_a"]["gender"]
+    gender_b = conv["speaker_b"]["gender"]
+    voice_a = CONV_VOICES.get(gender_a, CONV_VOICES["male"])
+    if gender_a == gender_b:
+        # 同性の場合: Aは通常の声、BはSteffan(male) or Jenny(female)
+        if gender_b == "male":
+            voice_b = "en-US-SteffanNeural"
+        else:
+            voice_b = "en-US-JennyNeural"
+    else:
+        voice_b = CONV_VOICES.get(gender_b, CONV_VOICES["female"])
+    silence = AudioSegment.silent(duration=50)   # 自然な会話の間（約0.05秒）
+    combined = AudioSegment.silent(duration=0)
     for ln in conv["lines"]:
         voice = voice_a if ln["speaker"] == "A" else voice_b
         try:
@@ -272,11 +282,9 @@ def build_back(audio_list, conv_files, content):
     # 会話3つ（個別音声ボタン付き）
     convs_html = ""
     for i, (conv, (conv_filename, _)) in enumerate(zip(content["conversations"], conv_files), 1):
-        name_a = conv["speaker_a"]["name"]
-        name_b = conv["speaker_b"]["name"]
         lines_html = ""
         for ln in conv["lines"]:
-            name = name_a if ln["speaker"] == "A" else name_b
+            name = "A" if ln["speaker"] == "A" else "B"
             cls  = "ep-sa" if ln["speaker"] == "A" else "ep-sb"
             text_hl = highlight_phrase(ln["text"], content["phrase_display"])
             lines_html += f'<p><span class="{cls}">{name}:</span> {text_hl}</p>'
