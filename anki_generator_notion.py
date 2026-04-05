@@ -7,7 +7,8 @@ Notion DB の「⏳ 未処理」フレーズを取得 → Gemini + edge-tts → 
 import os, json, hashlib, asyncio, tempfile, requests
 from pathlib import Path
 from datetime import datetime
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 import edge_tts
 import genanki
 
@@ -109,7 +110,16 @@ Return ONLY a valid JSON object (no markdown, no backticks) with this exact stru
   "level": "beginner or intermediate or advanced"
 }}"""
 
-    response = model.generate_content(prompt)
+    response = client.models.generate_content
+    (
+    model=GEMINI_MODEL,
+    contents=prompt,
+    config=types.GenerateContentConfig
+        (
+        response_mime_type="application/json",
+        temperature=0.7
+        )
+    )
     text = response.text.strip()
     if text.startswith("```"):
         text = text.split("```")[1]
@@ -237,14 +247,7 @@ def main():
     OUTPUT_DIR.mkdir(exist_ok=True)
 
     # Gemini 初期化
-    genai.configure(api_key=GEMINI_API_KEY)
-    gemini_model = genai.GenerativeModel(
-        model_name=GEMINI_MODEL,
-        generation_config=genai.types.GenerationConfig(
-            response_mime_type="application/json",
-            temperature=0.7
-        )
-    )
+    client = genai.Client(api_key=GEMINI_API_KEY)
 
     # Notion から未処理フレーズを取得
     print("📋 Notion から未処理フレーズを取得中...")
