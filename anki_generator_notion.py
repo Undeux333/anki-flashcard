@@ -32,18 +32,15 @@ ANKI_DECK_ID  = 2059400110
 
 VOICES = [
     {"id": "steffan",     "name": "Steffan",     "voice": "en-US-SteffanNeural",         "gender": "male",   "desc": "casual"},
-    {"id": "andrew",      "name": "Andrew",      "voice": "en-US-AndrewNeural",          "gender": "male",   "desc": "warm"},
     {"id": "christopher", "name": "Christopher", "voice": "en-US-ChristopherNeural",     "gender": "male",   "desc": "deep"},
-    {"id": "eric",        "name": "Eric",        "voice": "en-US-EricNeural",            "gender": "male",   "desc": "clear"},
     {"id": "ava",         "name": "Ava",         "voice": "en-US-AvaMultilingualNeural", "gender": "female", "desc": "natural"},
-    {"id": "aria",        "name": "Aria",        "voice": "en-US-AriaNeural",            "gender": "female", "desc": "expressive"},
     {"id": "jenny",       "name": "Jenny",       "voice": "en-US-JennyNeural",           "gender": "female", "desc": "clear"},
     {"id": "ana",         "name": "Ana",         "voice": "en-US-AnaNeural",             "gender": "female", "desc": "bright"},
 ]
 
 CONV_VOICES = {
     "female": "en-US-JennyNeural",
-    "male":   "en-US-AndrewNeural",
+    "male":   "en-US-ChristopherNeural",
 }
 
 def notion_headers():
@@ -235,7 +232,8 @@ def highlight_phrase(text: str, phrase: str) -> str:
         text
     )
 
-def build_voice_buttons(audio_list):
+def build_voice_buttons_front(audio_list):
+    """表面用：[sound:]タグで自動再生"""
     buttons = ""
     for item in audio_list:
         v = item["voice"]
@@ -245,11 +243,27 @@ def build_voice_buttons(audio_list):
         buttons += f"""<div class="ep-vbtn"><div class="ep-vplay" style="background:{bg};color:{fg};">&#9654;</div><div class="ep-vinfo"><div class="ep-vname">{v['name']}</div><div class="ep-vdesc">{v['gender']} &middot; {v['desc']}</div></div>[sound:{f}]</div>"""
     return buttons
 
+def build_voice_buttons_back(audio_list):
+    """裏面用：クリック時のみ再生（audioタグ + JS）"""
+    buttons = ""
+    for i, item in enumerate(audio_list):
+        v = item["voice"]
+        f = item["filename"]
+        bg = "#ebf4ff" if v["gender"] == "male" else "#f0fff4"
+        fg = "#2b6cb0" if v["gender"] == "male" else "#276749"
+        aid = f"va_{i}"
+        buttons += f"""<div class="ep-vbtn" onclick="document.getElementById('{aid}').play()" style="cursor:pointer;"><div class="ep-vplay" style="background:{bg};color:{fg};">&#9654;</div><div class="ep-vinfo"><div class="ep-vname">{v['name']}</div><div class="ep-vdesc">{v['gender']} &middot; {v['desc']}</div></div><audio id="{aid}" src="{f}"></audio></div>"""
+    return buttons
+
 def build_front(audio_list, content):
     lvl = content.get("level", "intermediate")
     style = LEVEL_STYLE.get(lvl, LEVEL_STYLE["intermediate"])
-    buttons = build_voice_buttons(audio_list)
+    buttons = build_voice_buttons_front(audio_list)
+    # 最初の音声ファイルを自動再生
+    auto_file = audio_list[0]["filename"] if audio_list else ""
+    auto_play = f"[sound:{auto_file}]" if auto_file else ""
     return f"""<div class="ep-front">
+{auto_play}
 <span class="ep-badge" style="{style}">{lvl.upper()}</span>
 <div class="ep-label">&#127925; Listen &amp; recall</div>
 <div class="ep-vgrid">{buttons}</div>
@@ -271,8 +285,10 @@ def build_back(audio_list, conv_files, content):
             text_hl = highlight_phrase(ln["text"], content["phrase_display"])
             lines_html += f'<p><span class="{cls}">{name}:</span> {text_hl}</p>'
 
-        convs_html += f"""<div class="ep-conv-block">[sound:{conv_filename}]
-  <div class="ep-conv-header">
+        cid = f"conv_{i}"
+        convs_html += f"""<div class="ep-conv-block">
+  <audio id="{cid}" src="{conv_filename}"></audio>
+  <div class="ep-conv-header" onclick="document.getElementById('{cid}').play()" style="cursor:pointer;">
     <div class="ep-conv-setting">&#128205; {conv['setting']}</div>
     <div class="ep-conv-play-btn">&#9654; Play</div>
   </div>
@@ -298,8 +314,8 @@ def build_back(audio_list, conv_files, content):
         label = PRIO_STYLE[r["priority"]][0]
         related_html += f'<div class="ep-rel-row"><span class="ep-prio" style="color:{fg};background:{bg};">{label}</span><span class="ep-rel-phrase">{r["phrase"]}</span><span class="ep-rel-note">&#8594; {r["note"]}</span></div>'
 
-    # 音声ボタン（一番下）
-    buttons = build_voice_buttons(audio_list)
+    # 音声ボタン（一番下・クリック再生）
+    buttons = build_voice_buttons_back(audio_list)
 
     # audio_textのフレーズをハイライト
     audio_text_hl = highlight_phrase(content["audio_text"], content["phrase_display"])
