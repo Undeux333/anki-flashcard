@@ -32,7 +32,6 @@ jobs:
           NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
         run: |
           python anki_generator_notion.py
-          # .apkg が生成されたか確認
           if ls output/*.apkg 1>/dev/null 2>&1; then
             echo "apkg_exists=true" >> $GITHUB_OUTPUT
             echo "apkg_path=$(ls output/*.apkg | head -1)" >> $GITHUB_OUTPUT
@@ -49,18 +48,41 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
-      - name: Notify Android via ntfy
+      - name: Send .apkg to Android via ntfy
         if: steps.generate.outputs.apkg_exists == 'true'
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           RUN_NUMBER: ${{ github.run_number }}
-          REPO:       ${{ github.repository }}
         run: |
-          ARTIFACT_URL="https://github.com/${REPO}/actions/runs/${{ github.run_id }}"
-          curl -s \
-            -H "Title: Anki cards ready" \
-            -H "Priority: default" \
-            -H "Tags: white_check_mark" \
-            -H "Click: ${ARTIFACT_URL}" \
-            -d "New Anki cards have been generated. Tap to open the download page.(Run #${RUN_NUMBER})" \
-            "https://ntfy.sh/${NTFY_TOPIC}"
+          APKG_FILE=$(ls output/*.apkg | head -1)
+
+          # .apkg を添付してntfyに送信・添付URLを取得
+          RESPONSE=$(curl -s \
+            -T "$APKG_FILE" \
+            -H "Title: Anki upload" \
+            -H "Filename: anki_cards.apkg" \
+            "https://ntfy.sh/${NTFY_TOPIC}")
+
+          echo "ntfy response: $RESPONSE"
+
+          ATT_URL=$(echo "$RESPONSE" | python3 -c \
+            "import sys,json; d=json.load(sys.stdin); print(d.get('attachment',{}).get('url',''))" \
+            2>/dev/null)
+
+          if [ -n "$ATT_URL" ]; then
+            echo "Attachment URL: $ATT_URL"
+            # 添付URLを本文にした通知を送信（MacroDroidがこのURLを開く）
+            curl -s \
+              -H "Title: Anki cards ready" \
+              -H "Tags: white_check_mark" \
+              -d "$ATT_URL" \
+              "https://ntfy.sh/${NTFY_TOPIC}"
+          else
+            echo "Warning: attachment URL not found"
+            # フォールバック：GitHub ActionsページのURLを通知
+            curl -s \
+              -H "Title: Anki cards ready" \
+              -H "Tags: white_check_mark" \
+              -d "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+              "https://ntfy.sh/${NTFY_TOPIC}"
+          fi
