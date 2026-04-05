@@ -78,5 +78,6 @@ jobs:
           curl -s \
             -H "Title: Anki cards ready" \
             -H "Tags: white_check_mark" \
-            -d "$DOWNLOAD_URL" \
+            -H "Click: $DOWNLOAD_URL" \
+            -d "New Anki cards have been generated. Tap to download." \
             "https://ntfy.sh/${NTFY_TOPIC}"
