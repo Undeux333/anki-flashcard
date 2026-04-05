@@ -1,0 +1,37 @@
+name: Generate Anki Cards
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'   # 30分ごとに自動実行
+  workflow_dispatch:           # GitHubのUIから手動実行も可能
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Generate Anki cards
+        env:
+          GEMINI_API_KEY:     ${{ secrets.GEMINI_API_KEY }}
+          NOTION_TOKEN:       ${{ secrets.NOTION_TOKEN }}
+          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+        run: python anki_generator_notion.py
+
+      - name: Upload .apkg as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: anki-cards-${{ github.run_number }}
+          path: output/*.apkg
+          if-no-files-found: ignore
+          retention-days: 30
