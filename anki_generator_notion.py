@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Anki Flashcard Generator v4 — Notion + GitHub Actions
-新デザイン: シーン画像・会話音声・Use it表・関連フレーズ
+Anki Flashcard Generator v5 — Notion + GitHub Actions
+変更: ネイティブ速度・画像なし・例文3つ・音声ボタン下部配置
 """
 
-import os, json, hashlib, asyncio, tempfile, requests, io, urllib.parse
+import os, json, hashlib, asyncio, tempfile, requests, io
 from pathlib import Path
 from datetime import datetime
 from google import genai
@@ -13,14 +13,11 @@ import edge_tts
 import genanki
 from pydub import AudioSegment
 
-# ═══════════════════════════════════════════════
-#   ⚙️  設定
-# ═══════════════════════════════════════════════
 GEMINI_API_KEY     = os.environ.get("GEMINI_API_KEY", "")
 NOTION_TOKEN       = os.environ.get("NOTION_TOKEN", "")
 NOTION_DATABASE_ID = os.environ.get("NOTION_DATABASE_ID", "")
 GEMINI_MODEL       = "gemini-3.1-flash-lite-preview"
-TTS_RATE           = "-12%"
+TTS_RATE           = "0%"   # ネイティブの実際の会話スピード
 NOTION_VERSION     = "2022-06-28"
 OUTPUT_DIR         = Path("output")
 
@@ -30,10 +27,9 @@ STATUS_PENDING = "Pending"
 STATUS_DONE    = "Done"
 STATUS_ERROR   = "Error"
 
-ANKI_MODEL_ID = 1607392320
+ANKI_MODEL_ID = 1607392321
 ANKI_DECK_ID  = 2059400110
 
-# 8つの個別音声
 VOICES = [
     {"id": "steffan",     "name": "Steffan",     "voice": "en-US-SteffanNeural",         "gender": "male",   "desc": "casual"},
     {"id": "andrew",      "name": "Andrew",      "voice": "en-US-AndrewNeural",          "gender": "male",   "desc": "warm"},
@@ -45,15 +41,11 @@ VOICES = [
     {"id": "ana",         "name": "Ana",         "voice": "en-US-AnaNeural",             "gender": "female", "desc": "bright"},
 ]
 
-# 会話用音声（話者ごと）
 CONV_VOICES = {
     "female": "en-US-JennyNeural",
     "male":   "en-US-AndrewNeural",
 }
 
-# ═══════════════════════════════════════════════
-#   Notion API
-# ═══════════════════════════════════════════════
 def notion_headers():
     return {
         "Authorization": f"Bearer {NOTION_TOKEN}",
@@ -91,39 +83,31 @@ def update_notion_status(page_id, status):
     payload = {"properties": {PROP_STATUS: {"select": {"name": status}}}}
     requests.patch(url, headers=notion_headers(), json=payload, timeout=10)
 
-# ═══════════════════════════════════════════════
-#   Gemini コンテンツ生成
-# ═══════════════════════════════════════════════
 def generate_content(client, phrase: str) -> dict:
     prompt = f"""You are a native American English teacher making Anki flashcards for Japanese adult learners.
 
 Target phrase: "{phrase}"
 
 CRITICAL RULES:
-- Conversation must sound 100% like real native American speech. No textbook English.
+- ALL English must sound 100% like real native American speech. No textbook English ever.
 - Use contractions, fillers (y'know, I mean, honestly, like), natural flow.
 - Slang is OK. Offensive language is NOT OK.
-- Meaning must be explained like you're talking to a 10-year-old American kid. Super simple. 1-2 sentences max.
-- image_prompt must describe a vivid, specific, photorealistic real-life scene that captures this phrase perfectly.
+- simple_meaning: explain like talking to a 10-year-old American kid. Super simple, max 2 sentences. Be concrete and vivid.
+- For time-related phrases, always give SPECIFIC time ranges (e.g. "about 3 to 6 hours ago", "roughly 2 weeks", "around 1 to 3 months"). Never say vague things like "a long time" or "some time".
+- examples: 3 completely different real-life situations. Each sentence must naturally contain the phrase. No A/B dialogue format.
+- also_say: for each relationship type, give the alternative phrase AND explain in 1 line HOW it feels different (more casual? more formal? softer? stronger?).
+- related: for each phrase, explain exactly WHEN or HOW to use it in 1 concrete line.
 
 Return ONLY valid JSON (no markdown, no backticks):
 {{
   "phrase_display": "the phrase with correct capitalization",
-  "audio_text": "natural standalone phrase or sentence for TTS",
-  "image_prompt": "photorealistic scene, specific setting, showing real people, bright natural lighting, cinematic, {phrase} situation",
-  "simple_meaning": "explain like to a 10-year-old American kid, 1-2 sentences, super simple and fun",
-  "conversation": {{
-    "setting": "specific real-life situation, place, and relationship between speakers",
-    "speaker_a": {{"name": "first name", "gender": "female or male"}},
-    "speaker_b": {{"name": "first name", "gender": "female or male"}},
-    "lines": [
-      {{"speaker": "A", "text": "natural colloquial line", "note": ""}},
-      {{"speaker": "B", "text": "natural colloquial line", "note": "optional brief note"}},
-      {{"speaker": "A", "text": "natural colloquial line", "note": ""}},
-      {{"speaker": "B", "text": "natural colloquial line", "note": ""}},
-      {{"speaker": "A", "text": "natural colloquial line", "note": ""}}
-    ]
-  }},
+  "audio_text": "1 natural sentence that contains the phrase in context",
+  "simple_meaning": "explain like to a 10-year-old American kid, super concrete, max 2 sentences. For time phrases, give specific ranges.",
+  "examples": [
+    {{"sentence": "natural colloquial sentence using the phrase", "situation": "brief context (who, where)"}},
+    {{"sentence": "natural colloquial sentence using the phrase", "situation": "brief context (who, where)"}},
+    {{"sentence": "natural colloquial sentence using the phrase", "situation": "brief context (who, where)"}}
+  ],
   "who_to_use": [
     {{"who": "Close friends", "status": "best or ok or avoid", "note": "short exception note if status is ok, else empty string"}},
     {{"who": "Friends", "status": "best or ok or avoid", "note": ""}},
@@ -132,16 +116,16 @@ Return ONLY valid JSON (no markdown, no backticks):
     {{"who": "Boss / Formal", "status": "best or ok or avoid", "note": ""}}
   ],
   "also_say": [
-    {{"who": "Close friends / Family", "phrase": "alternative phrase", "note": "1 line: feel/nuance difference"}},
-    {{"who": "Friends / Coworkers", "phrase": "alternative phrase", "note": "1 line: feel/nuance difference"}},
-    {{"who": "Boss / Formal", "phrase": "alternative phrase", "note": "1 line: feel/nuance difference"}}
+    {{"who": "Close friends / Family", "phrase": "alternative phrase", "note": "exactly how it feels different from the original in 1 line"}},
+    {{"who": "Friends / Coworkers", "phrase": "alternative phrase", "note": "exactly how it feels different from the original in 1 line"}},
+    {{"who": "Boss / Formal", "phrase": "alternative phrase", "note": "exactly how it feels different from the original in 1 line"}}
   ],
   "related": [
-    {{"phrase": "related phrase", "note": "brief usage note", "priority": "must"}},
-    {{"phrase": "related phrase", "note": "brief usage note", "priority": "must"}},
-    {{"phrase": "related phrase", "note": "brief usage note", "priority": "soon"}},
-    {{"phrase": "related phrase", "note": "brief usage note", "priority": "soon"}},
-    {{"phrase": "related phrase", "note": "brief usage note", "priority": "later"}}
+    {{"phrase": "related phrase", "note": "exactly when/how to use it in 1 concrete line", "priority": "must"}},
+    {{"phrase": "related phrase", "note": "exactly when/how to use it in 1 concrete line", "priority": "must"}},
+    {{"phrase": "related phrase", "note": "exactly when/how to use it in 1 concrete line", "priority": "soon"}},
+    {{"phrase": "related phrase", "note": "exactly when/how to use it in 1 concrete line", "priority": "soon"}},
+    {{"phrase": "related phrase", "note": "exactly when/how to use it in 1 concrete line", "priority": "later"}}
   ],
   "level": "beginner or intermediate or advanced"
 }}"""
@@ -171,35 +155,6 @@ Return ONLY valid JSON (no markdown, no backticks):
             if attempt == 3:
                 raise e
 
-# ═══════════════════════════════════════════════
-#   Pollinations.ai でシーン画像生成（無料）
-# ═══════════════════════════════════════════════
-def generate_scene_image(prompt: str, uid: str, tmpdir: str) -> tuple[str, str]:
-    import time
-    seed = int(uid[:6], 16) % 100000
-    encoded = urllib.parse.quote(prompt)
-    url = f"https://image.pollinations.ai/prompt/{encoded}?width=800&height=400&nologo=true&seed={seed}"
-    filename = f"ep_{uid}_scene.jpg"
-    filepath = str(Path(tmpdir) / filename)
-    for attempt in range(4):
-        try:
-            if attempt > 0:
-                wait = 20 * attempt
-                print(f"    ⏳ {wait}秒待機してリトライ ({attempt}/3)...")
-                time.sleep(wait)
-            res = requests.get(url, timeout=90)
-            res.raise_for_status()
-            with open(filepath, "wb") as f:
-                f.write(res.content)
-            return filepath, filename
-        except Exception as e:
-            if attempt == 3:
-                raise e
-    return filepath, filename
-
-# ═══════════════════════════════════════════════
-#   edge-tts 音声生成
-# ═══════════════════════════════════════════════
 async def _tts_save(text, voice, rate, path):
     communicate = edge_tts.Communicate(text, voice=voice, rate=rate)
     await communicate.save(path)
@@ -225,28 +180,23 @@ def generate_all_audio(text: str, uid: str, tmpdir: str) -> list[dict]:
             print(f"    ⚠️  {v['name']} 失敗: {e}")
     return results
 
-def generate_conversation_audio(content: dict, uid: str, tmpdir: str) -> tuple[str, str]:
-    conv = content["conversation"]
-    voice_a = CONV_VOICES.get(conv["speaker_a"]["gender"], CONV_VOICES["female"])
-    voice_b = CONV_VOICES.get(conv["speaker_b"]["gender"], CONV_VOICES["male"])
-    silence = AudioSegment.silent(duration=700)
+def generate_example_audio(examples: list, uid: str, tmpdir: str) -> list[dict]:
+    results = []
+    voice = "en-US-AndrewNeural"
+    silence = AudioSegment.silent(duration=800)
     combined = AudioSegment.silent(duration=300)
-    for ln in conv["lines"]:
-        voice = voice_a if ln["speaker"] == "A" else voice_b
+    for ex in examples:
         try:
-            audio_bytes = asyncio.run(_tts_bytes(ln["text"], voice, TTS_RATE))
+            audio_bytes = asyncio.run(_tts_bytes(ex["sentence"], voice, TTS_RATE))
             segment = AudioSegment.from_mp3(io.BytesIO(audio_bytes))
             combined += segment + silence
         except Exception as e:
-            print(f"    ⚠️  会話行生成失敗: {e}")
-    filename = f"ep_{uid}_conv.mp3"
+            print(f"    ⚠️  例文音声生成失敗: {e}")
+    filename = f"ep_{uid}_examples.mp3"
     filepath = str(Path(tmpdir) / filename)
     combined.export(filepath, format="mp3")
-    return filepath, filename
+    return filename, filepath
 
-# ═══════════════════════════════════════════════
-#   HTML ビルダー
-# ═══════════════════════════════════════════════
 LEVEL_STYLE = {
     "beginner":     "background:#e8f5e9;color:#2e7d32",
     "intermediate": "background:#fff8e1;color:#f57f17",
@@ -265,6 +215,15 @@ PRIO_STYLE = {
     "later": ("later", "#5f5e5a", "#f1efe8"),
 }
 
+def highlight_phrase(text: str, phrase: str) -> str:
+    """フレーズをテキスト内でハイライト表示"""
+    import re
+    pattern = re.compile(re.escape(phrase), re.IGNORECASE)
+    return pattern.sub(
+        f'<span style="color:#2b6cb0;font-weight:700;background:#ebf4ff;padding:0 2px;border-radius:3px;">{phrase}</span>',
+        text
+    )
+
 def build_voice_buttons(audio_list):
     buttons = ""
     for item in audio_list:
@@ -279,27 +238,35 @@ def build_front(audio_list, content):
     lvl = content.get("level", "intermediate")
     style = LEVEL_STYLE.get(lvl, LEVEL_STYLE["intermediate"])
     buttons = build_voice_buttons(audio_list)
-    return f"""<div class="ep-front"><span class="ep-badge" style="{style}">{lvl.upper()}</span><div class="ep-label">&#127925; Listen &amp; recall</div><div class="ep-vgrid">{buttons}</div></div>"""
+    # audio_textのフレーズをハイライト
+    audio_text_hl = highlight_phrase(content["audio_text"], content["phrase_display"])
+    return f"""<div class="ep-front">
+<span class="ep-badge" style="{style}">{lvl.upper()}</span>
+<div class="ep-audio-sentence">{audio_text_hl}</div>
+<div class="ep-label">&#127925; Listen &amp; recall</div>
+<div class="ep-vgrid">{buttons}</div>
+</div>"""
 
-def build_back(audio_list, conv_filename, image_filename, content):
-    conv  = content["conversation"]
+def build_back(audio_list, examples_filename, content):
     lvl   = content.get("level", "intermediate")
     style = LEVEL_STYLE.get(lvl, LEVEL_STYLE["intermediate"])
 
-    # 会話テキスト
-    name_a = conv["speaker_a"]["name"]
-    name_b = conv["speaker_b"]["name"]
-    lines_html = ""
-    for ln in conv["lines"]:
-        name = name_a if ln["speaker"] == "A" else name_b
-        cls  = "ep-sa" if ln["speaker"] == "A" else "ep-sb"
-        note = f' <span class="ep-note">({ln["note"]})</span>' if ln.get("note") else ""
-        lines_html += f'<p><span class="{cls}">{name}:</span> {ln["text"]}{note}</p>'
+    # audio_textのフレーズをハイライト
+    audio_text_hl = highlight_phrase(content["audio_text"], content["phrase_display"])
 
-    # 個別音声ボタン
-    buttons = build_voice_buttons(audio_list)
+    # 例文3つ
+    examples_html = ""
+    for i, ex in enumerate(content["examples"], 1):
+        sentence_hl = highlight_phrase(ex["sentence"], content["phrase_display"])
+        examples_html += f"""<div class="ep-example">
+  <div class="ep-ex-num">{i}</div>
+  <div class="ep-ex-content">
+    <div class="ep-ex-sentence">{sentence_hl}</div>
+    <div class="ep-ex-situation">&#128205; {ex['situation']}</div>
+  </div>
+</div>"""
 
-    # Who to use テーブル
+    # Who to use
     who_rows = ""
     for w in content["who_to_use"]:
         icon, label, fg, bg = STATUS_MAP.get(w["status"], STATUS_MAP["ok"])
@@ -309,38 +276,44 @@ def build_back(audio_list, conv_filename, image_filename, content):
     # Also say
     also_html = ""
     for a in content["also_say"]:
-        also_html += f'<div class="ep-also-row"><div class="ep-also-who">{a["who"]}</div><div class="ep-also-phrase">{a["phrase"]}</div><div class="ep-also-note">{a["note"]}</div></div>'
+        also_html += f'<div class="ep-also-row"><div class="ep-also-who">{a["who"]}</div><div class="ep-also-phrase">{a["phrase"]}</div><div class="ep-also-note">&#8594; {a["note"]}</div></div>'
 
     # Related
     related_html = ""
     for r in content["related"]:
         fg, bg = PRIO_STYLE[r["priority"]][1], PRIO_STYLE[r["priority"]][2]
         label = PRIO_STYLE[r["priority"]][0]
-        related_html += f'<div class="ep-rel-row"><span class="ep-prio" style="color:{fg};background:{bg};">{label}</span><span class="ep-rel-phrase">{r["phrase"]}</span><span class="ep-rel-note">— {r["note"]}</span></div>'
+        related_html += f'<div class="ep-rel-row"><span class="ep-prio" style="color:{fg};background:{bg};">{label}</span><span class="ep-rel-phrase">{r["phrase"]}</span><span class="ep-rel-note">&#8594; {r["note"]}</span></div>'
+
+    # 音声ボタン（下部）
+    buttons = build_voice_buttons(audio_list)
 
     return f"""<div class="ep-back">
-<img class="ep-scene" src="{image_filename}" alt="scene">
 <div class="ep-inner">
 <span class="ep-badge" style="{style}">{lvl.upper()}</span>
 <div class="ep-phrase">&#8220;{content['phrase_display']}&#8221;</div>
-<div class="ep-label">&#127925; Phrase — all voices</div>
-<div class="ep-vgrid">{buttons}</div>
-<div class="ep-label">&#128172; Conversation</div>
-<div class="ep-conv-wrap">
-  <div class="ep-conv-top">
-    <div class="ep-setting">&#128205; {conv['setting']}</div>
-    <div class="ep-conv-play">[sound:{conv_filename}] &#9654; Play full conversation</div>
-  </div>
-  <div class="ep-lines">{lines_html}</div>
-</div>
-<div class="ep-label">&#128161; What it means</div>
+<div class="ep-audio-sentence-back">{audio_text_hl}</div>
+
+<div class="ep-label">&#128161; What it actually means</div>
 <div class="ep-box ep-meaning">{content['simple_meaning']}</div>
-<div class="ep-label">&#128100; Who do you say this to?</div>
+
+<div class="ep-label">&#128172; Real-life examples</div>
+<div class="ep-examples-wrap">
+  {examples_html}
+  <div class="ep-ex-audio">[sound:{examples_filename}] &#9654; Listen to all examples</div>
+</div>
+
+<div class="ep-label">&#128100; Who can you say this to?</div>
 <table class="ep-tbl"><tbody>{who_rows}</tbody></table>
-<div class="ep-label">&#128260; You can also say</div>
+
+<div class="ep-label">&#128260; What to say instead — and why</div>
 <div class="ep-also">{also_html}</div>
-<div class="ep-label">&#128218; Learn these too</div>
+
+<div class="ep-label">&#128218; Learn these next — and when to use them</div>
 <div class="ep-related">{related_html}</div>
+
+<div class="ep-label" style="margin-top:20px;">&#127925; Listen in all voices</div>
+<div class="ep-vgrid">{buttons}</div>
 </div></div>"""
 
 CARD_CSS = """
@@ -352,27 +325,25 @@ CARD_CSS = """
 }
 .ep-front { max-width: 560px; margin: 0 auto; padding: 20px 16px; }
 .ep-back { max-width: 560px; margin: 0 auto; }
-.ep-scene { width: 100%; height: 200px; object-fit: cover; display: block; border-radius: 12px 12px 0 0; }
 .ep-inner { padding: 16px 16px 24px; }
 .ep-badge { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: 1.2px; padding: 3px 12px; border-radius: 20px; margin-bottom: 12px; }
-.ep-phrase { font-size: 22px; font-weight: 700; color: #2b6cb0; text-align: center; margin-bottom: 14px; }
-.ep-label { font-size: 10px; font-weight: 700; color: #8a9ab5; letter-spacing: 1px; text-transform: uppercase; margin: 14px 0 7px; }
+.ep-phrase { font-size: 22px; font-weight: 700; color: #2b6cb0; text-align: center; margin-bottom: 10px; }
+.ep-audio-sentence { font-size: 17px; line-height: 1.7; color: #2d3748; text-align: center; margin: 12px 0 16px; padding: 12px 16px; background: #fff; border-radius: 10px; border: 1px solid #e2e8f0; }
+.ep-audio-sentence-back { font-size: 15px; line-height: 1.7; color: #4a5568; text-align: center; margin: 6px 0 14px; padding: 10px 14px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; }
+.ep-label { font-size: 10px; font-weight: 700; color: #8a9ab5; letter-spacing: 1px; text-transform: uppercase; margin: 16px 0 8px; }
 .ep-vgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-bottom: 2px; }
 .ep-vbtn { display: flex; align-items: center; gap: 7px; padding: 7px 9px; border: 1px solid #e2e8f0; border-radius: 8px; background: #ffffff; }
 .ep-vplay { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 10px; }
 .ep-vname { font-size: 12px; font-weight: 700; color: #2d3748; }
 .ep-vdesc { font-size: 10px; color: #a0aec0; }
-.ep-conv-wrap { background: #f0fff4; border-left: 3px solid #48bb78; border-radius: 0 8px 8px 0; overflow: hidden; }
-.ep-conv-top { padding: 9px 12px 0; }
-.ep-setting { font-size: 11px; color: #718096; font-style: italic; margin-bottom: 7px; }
-.ep-conv-play { font-size: 12px; color: #2b6cb0; font-weight: 600; margin-bottom: 9px; }
-.ep-lines { padding: 0 12px 10px; }
-.ep-sa { color: #2b6cb0; font-weight: 700; }
-.ep-sb { color: #c05621; font-weight: 700; }
-.ep-note { color: #a0aec0; font-size: 11px; }
-.ep-lines p { font-size: 13px; margin-bottom: 5px; }
 .ep-box { border-radius: 0 8px 8px 0; padding: 9px 12px; font-size: 13px; }
 .ep-meaning { background: #ebf4ff; border-left: 3px solid #4299e1; }
+.ep-examples-wrap { display: flex; flex-direction: column; gap: 8px; }
+.ep-example { display: flex; gap: 10px; background: #f0fff4; border-left: 3px solid #48bb78; border-radius: 0 8px 8px 0; padding: 10px 12px; }
+.ep-ex-num { font-size: 13px; font-weight: 700; color: #276749; flex-shrink: 0; width: 18px; }
+.ep-ex-sentence { font-size: 13px; color: #2d3748; line-height: 1.55; margin-bottom: 3px; }
+.ep-ex-situation { font-size: 11px; color: #718096; }
+.ep-ex-audio { font-size: 12px; color: #2b6cb0; font-weight: 600; margin-top: 6px; padding: 6px 12px; }
 .ep-tbl { width: 100%; border-collapse: collapse; font-size: 12px; background: #fff; border-radius: 8px; overflow: hidden; border: 1px solid #e2e8f0; }
 .ep-tbl-who { padding: 7px 10px; color: #4a5568; border-bottom: 1px solid #f0f4f8; width: 45%; }
 .ep-tbl tr:last-child td { border-bottom: none; }
@@ -382,30 +353,24 @@ CARD_CSS = """
 .ep-also { display: flex; flex-direction: column; gap: 6px; }
 .ep-also-row { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 10px; }
 .ep-also-who { font-size: 10px; color: #8a9ab5; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 2px; }
-.ep-also-phrase { font-size: 13px; font-weight: 700; color: #2d3748; margin-bottom: 2px; }
+.ep-also-phrase { font-size: 13px; font-weight: 700; color: #2d3748; margin-bottom: 3px; }
 .ep-also-note { font-size: 11px; color: #718096; }
 .ep-related { display: flex; flex-direction: column; gap: 5px; }
-.ep-rel-row { display: flex; align-items: baseline; gap: 7px; font-size: 12px; flex-wrap: wrap; }
+.ep-rel-row { display: flex; align-items: baseline; gap: 7px; font-size: 12px; flex-wrap: wrap; padding: 4px 0; }
 .ep-prio { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 20px; white-space: nowrap; }
 .ep-rel-phrase { font-weight: 700; color: #2d3748; }
 .ep-rel-note { color: #718096; font-size: 11px; }
 """
 
-# ═══════════════════════════════════════════════
-#   Anki モデル・デッキ
-# ═══════════════════════════════════════════════
 def build_anki_model():
     return genanki.Model(
         ANKI_MODEL_ID,
-        "EP_EnglishPhrase_v4",
+        "EP_EnglishPhrase_v5",
         fields=[{"name": "Front"}, {"name": "Back"}],
         templates=[{"name": "Card 1", "qfmt": "{{Front}}", "afmt": "{{Back}}"}],
         css=CARD_CSS
     )
 
-# ═══════════════════════════════════════════════
-#   メイン処理
-# ═══════════════════════════════════════════════
 def main():
     for var in ["GEMINI_API_KEY", "NOTION_TOKEN", "NOTION_DATABASE_ID"]:
         if not os.environ.get(var):
@@ -445,21 +410,16 @@ def main():
                 print("  ⏳ Gemini でコンテンツ生成中...")
                 content = generate_content(client, phrase)
 
-                print("  🖼️  シーン画像を生成中...")
-                import time; time.sleep(5)
-                img_path, img_filename = generate_scene_image(content["image_prompt"], uid, tmpdir)
-                all_media.append(img_path)
-
                 print("  🎙️  8音声を生成中...")
                 audio_list = generate_all_audio(content["audio_text"], uid, tmpdir)
                 all_media.extend([a["filepath"] for a in audio_list])
 
-                print("  🎭  会話音声を生成中...")
-                conv_path, conv_filename = generate_conversation_audio(content, uid, tmpdir)
-                all_media.append(conv_path)
+                print("  🎭  例文音声を生成中...")
+                ex_filename, ex_filepath = generate_example_audio(content["examples"], uid, tmpdir)
+                all_media.append(ex_filepath)
 
                 front = build_front(audio_list, content)
-                back  = build_back(audio_list, conv_filename, img_filename, content)
+                back  = build_back(audio_list, ex_filename, content)
 
                 note = genanki.Note(
                     model=anki_model,
