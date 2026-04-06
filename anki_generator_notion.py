@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Anki Flashcard Generator v6 — Notion + GitHub Actions
-変更: 表面は音声のみ・裏面フレーズ削除・会話形式3つ・個別音声ボタン
+Anki Flashcard Generator v7 — Notion + GitHub Actions
+New register system: Neutral / Polite / Casual
 """
 
 import os, json, hashlib, asyncio, tempfile, requests, io, re
@@ -27,22 +27,29 @@ STATUS_PENDING = "Pending"
 STATUS_DONE    = "Done"
 STATUS_ERROR   = "Error"
 
-ANKI_MODEL_ID = 1607392322
+ANKI_MODEL_ID = 1607392330
 ANKI_DECK_ID  = 2059400110
 
 VOICES = [
-    {"id": "steffan",     "name": "Steffan",     "voice": "en-US-SteffanNeural",         "gender": "male",   "desc": "casual"},
-    {"id": "brian",       "name": "Brian",       "voice": "en-US-BrianNeural",           "gender": "male",   "desc": "deep"},
-    {"id": "ava",         "name": "Ava",         "voice": "en-US-AvaMultilingualNeural", "gender": "female", "desc": "natural"},
-    {"id": "jenny",       "name": "Jenny",       "voice": "en-US-JennyNeural",           "gender": "female", "desc": "clear"},
-    {"id": "ana",         "name": "Ana",         "voice": "en-US-AnaNeural",             "gender": "female", "desc": "bright"},
+    {"id": "brian",   "name": "Brian",   "voice": "en-US-BrianNeural",           "gender": "male",   "desc": "deep"},
+    {"id": "ava",     "name": "Ava",     "voice": "en-US-AvaMultilingualNeural", "gender": "female", "desc": "natural"},
+    {"id": "steffan", "name": "Steffan", "voice": "en-US-SteffanNeural",         "gender": "male",   "desc": "casual"},
+    {"id": "jenny",   "name": "Jenny",   "voice": "en-US-JennyNeural",           "gender": "female", "desc": "clear"},
+    {"id": "ana",     "name": "Ana",     "voice": "en-US-AnaNeural",             "gender": "female", "desc": "bright"},
 ]
 
 CONV_VOICES = {
     "female": "en-US-AvaMultilingualNeural",
     "male":   "en-US-BrianNeural",
 }
+CONV_VOICES_ALT = {
+    "female": "en-US-JennyNeural",
+    "male":   "en-US-SteffanNeural",
+}
 
+# ═══════════════════════════════════════════════
+#   Notion API
+# ═══════════════════════════════════════════════
 def notion_headers():
     return {
         "Authorization": f"Bearer {NOTION_TOKEN}",
@@ -80,79 +87,93 @@ def update_notion_status(page_id, status):
     payload = {"properties": {PROP_STATUS: {"select": {"name": status}}}}
     requests.patch(url, headers=notion_headers(), json=payload, timeout=10)
 
+# ═══════════════════════════════════════════════
+#   Gemini content generation
+# ═══════════════════════════════════════════════
 def generate_content(client, phrase: str) -> dict:
     prompt = f"""You are a native American English teacher making Anki flashcards for Japanese adult learners.
 
 Target phrase: "{phrase}"
 
+REGISTER SYSTEM — understand this deeply before writing:
+
+● Neutral — The default. How Americans talk to almost everyone.
+  Not too casual, not too polite. Natural compression, contractions, normal rhythm.
+  Who: coworkers, new people, most everyday situations.
+  Key trait: this is the baseline — what most natives say most of the time.
+
+● Polite — A little more considerate. Slightly softer edge.
+  NOT longer or more formal — just a bit gentler in tone.
+  You still compress. You don't explain more than needed.
+  Who: boss, clients, someone you want to be careful with.
+  Key trait: short stays short — you soften the angle, not the length.
+  Example: "Can you check this?" → Polite → "Could you check this?" or "Mind taking a look?"
+  AVOID: over-explaining, long justifications, stiff phrasing.
+
+● Casual — Compressed and fast. Main difference is you DROP words.
+  Subject can disappear. Rhythm gets lighter and looser.
+  Who: close friends, family — people you're totally relaxed with.
+  Key trait: "Can you check this?" → Casual → "Check this out." / "Take a look?"
+
 CRITICAL RULES:
-- ALL English must sound 100% like real native American speech. No textbook English ever.
-- Use contractions, fillers (y'know, I mean, honestly, like), natural flow.
-- Slang is OK. Offensive language is NOT OK.
-- simple_meaning: explain like talking to a 10-year-old American kid. Super simple, max 2 sentences. Be concrete and vivid.
-- For time-related phrases, always give SPECIFIC time ranges (e.g. "about 3 to 6 hours ago", "roughly 2 weeks"). Never say vague things like "a long time".
-- conversations: 3 completely different real-life situations. Each must be a SHORT natural A/B conversation (3-5 lines) that naturally includes the phrase. 100% colloquial American English.
-- also_say: for each relationship type, give the alternative phrase AND explain in 1 line HOW it feels different.
-- related: for each phrase, explain exactly WHEN or HOW to use it in 1 concrete line.
+- ALL English must sound like real American speech — never textbook, never written.
+- Use contractions, fillers (y'know, I mean, honestly, like), natural rhythm.
+- simple_meaning: explain to a native English-speaking child (CEFR A1-A2 vocabulary only). Short, concrete, vivid. Max 2 sentences.
+- For time-related phrases: always give SPECIFIC ranges (e.g. "about 3 to 6 hours ago"). Never say "a long time."
+- conversations: 3 separate scenes — Neutral first, then Polite, then Casual. Each is a short natural A/B dialogue (3-5 lines). The phrase must appear naturally in context.
+- who_to_use: evaluate each register with "best" or "ok". Use "ok" only when the phrase works but needs a small tweak to feel right. Add a short note ONLY for "ok".
+- also_say: generate ONLY for registers that are "ok". Skip registers that are "best". If ALL are "best", return an empty array.
 
 Return ONLY valid JSON (no markdown, no backticks):
 {{
   "phrase_display": "the phrase with correct capitalization",
-  "audio_text": "1 natural sentence that contains the phrase in context",
-  "simple_meaning": "explain like to a 10-year-old American kid, super concrete, max 2 sentences.",
+  "audio_text": "1 natural Neutral sentence containing the phrase",
+  "simple_meaning": "explain to a native English-speaking child in A1-A2 words. Max 2 sentences. Concrete and vivid.",
   "conversations": [
     {{
+      "register": "neutral",
       "setting": "brief situation description",
-      "speaker_a": {{"name": "first name", "gender": "female or male"}},
-      "speaker_b": {{"name": "first name", "gender": "female or male"}},
+      "speaker_a": {{"gender": "female or male"}},
+      "speaker_b": {{"gender": "female or male"}},
       "lines": [
-        {{"speaker": "A", "text": "natural colloquial line"}},
-        {{"speaker": "B", "text": "natural colloquial line"}},
-        {{"speaker": "A", "text": "natural colloquial line using the phrase"}},
-        {{"speaker": "B", "text": "natural colloquial line"}}
+        {{"speaker": "A", "text": "natural line"}},
+        {{"speaker": "B", "text": "natural line"}},
+        {{"speaker": "A", "text": "natural line using the phrase"}},
+        {{"speaker": "B", "text": "natural line"}}
       ]
     }},
     {{
-      "setting": "completely different situation",
-      "speaker_a": {{"name": "first name", "gender": "female or male"}},
-      "speaker_b": {{"name": "first name", "gender": "female or male"}},
+      "register": "polite",
+      "setting": "different situation requiring a bit more care",
+      "speaker_a": {{"gender": "female or male"}},
+      "speaker_b": {{"gender": "female or male"}},
       "lines": [
-        {{"speaker": "A", "text": "natural colloquial line"}},
-        {{"speaker": "B", "text": "natural colloquial line using the phrase"}},
-        {{"speaker": "A", "text": "natural colloquial line"}},
-        {{"speaker": "B", "text": "natural colloquial line"}}
+        {{"speaker": "A", "text": "natural line"}},
+        {{"speaker": "B", "text": "natural polite line using the phrase"}},
+        {{"speaker": "A", "text": "natural line"}},
+        {{"speaker": "B", "text": "natural line"}}
       ]
     }},
     {{
-      "setting": "completely different situation",
-      "speaker_a": {{"name": "first name", "gender": "female or male"}},
-      "speaker_b": {{"name": "first name", "gender": "female or male"}},
+      "register": "casual",
+      "setting": "relaxed situation with close friends or family",
+      "speaker_a": {{"gender": "female or male"}},
+      "speaker_b": {{"gender": "female or male"}},
       "lines": [
-        {{"speaker": "A", "text": "natural colloquial line"}},
-        {{"speaker": "B", "text": "natural colloquial line"}},
-        {{"speaker": "A", "text": "natural colloquial line"}},
-        {{"speaker": "B", "text": "natural colloquial line using the phrase"}}
+        {{"speaker": "A", "text": "casual line"}},
+        {{"speaker": "B", "text": "casual compressed line using the phrase"}},
+        {{"speaker": "A", "text": "casual line"}},
+        {{"speaker": "B", "text": "casual line"}}
       ]
     }}
   ],
   "who_to_use": [
-    {{"who": "Close friends", "status": "best or ok or avoid", "note": "short exception note if ok, else empty string"}},
-    {{"who": "Friends", "status": "best or ok or avoid", "note": ""}},
-    {{"who": "Family", "status": "best or ok or avoid", "note": ""}},
-    {{"who": "Coworkers", "status": "best or ok or avoid", "note": ""}},
-    {{"who": "Boss / Formal", "status": "best or ok or avoid", "note": ""}}
+    {{"register": "neutral", "status": "best or ok", "note": "short note only if ok, else empty string"}},
+    {{"register": "polite",  "status": "best or ok", "note": "short note only if ok, else empty string"}},
+    {{"register": "casual",  "status": "best or ok", "note": "short note only if ok, else empty string"}}
   ],
   "also_say": [
-    {{"who": "Close friends / Family", "phrase": "alternative phrase", "note": "exactly how it feels different in 1 line"}},
-    {{"who": "Friends / Coworkers", "phrase": "alternative phrase", "note": "exactly how it feels different in 1 line"}},
-    {{"who": "Boss / Formal", "phrase": "alternative phrase", "note": "exactly how it feels different in 1 line"}}
-  ],
-  "related": [
-    {{"phrase": "related phrase", "note": "exactly when/how to use it in 1 concrete line", "priority": "must"}},
-    {{"phrase": "related phrase", "note": "exactly when/how to use it in 1 concrete line", "priority": "must"}},
-    {{"phrase": "related phrase", "note": "exactly when/how to use it in 1 concrete line", "priority": "soon"}},
-    {{"phrase": "related phrase", "note": "exactly when/how to use it in 1 concrete line", "priority": "soon"}},
-    {{"phrase": "related phrase", "note": "exactly when/how to use it in 1 concrete line", "priority": "later"}}
+    {{"register": "neutral or polite or casual", "phrase": "alternative spoken phrase", "example": "punchy realistic sentence using the alternative", "note": "1 line: how it feels different from the original"}}
   ],
   "level": "beginner or intermediate or advanced"
 }}"""
@@ -182,6 +203,9 @@ Return ONLY valid JSON (no markdown, no backticks):
             if attempt == 3:
                 raise e
 
+# ═══════════════════════════════════════════════
+#   Audio generation
+# ═══════════════════════════════════════════════
 async def _tts_save(text, voice, rate, path):
     communicate = edge_tts.Communicate(text, voice=voice, rate=rate)
     await communicate.save(path)
@@ -208,20 +232,16 @@ def generate_all_audio(text: str, uid: str, tmpdir: str) -> list[dict]:
     return results
 
 def generate_conversation_audio(conv: dict, uid: str, idx: int, tmpdir: str) -> tuple[str, str]:
-    # A/B で声を固定。両方同性の場合は別の声を使用
     gender_a = conv["speaker_a"]["gender"]
     gender_b = conv["speaker_b"]["gender"]
     voice_a = CONV_VOICES.get(gender_a, CONV_VOICES["male"])
     if gender_a == gender_b:
-        # 同性の場合: Aは通常の声、BはSteffan(male) or Jenny(female)
-        if gender_b == "male":
-            voice_b = "en-US-SteffanNeural"
-        else:
-            voice_b = "en-US-JennyNeural"
+        voice_b = CONV_VOICES_ALT.get(gender_b, CONV_VOICES_ALT["male"])
     else:
         voice_b = CONV_VOICES.get(gender_b, CONV_VOICES["female"])
-    silence = AudioSegment.silent(duration=50)   # 自然な会話の間（約0.05秒）
-    combined = AudioSegment.silent(duration=0)
+
+    silence = AudioSegment.silent(duration=50)
+    combined = AudioSegment.silent(duration=100)
     for ln in conv["lines"]:
         voice = voice_a if ln["speaker"] == "A" else voice_b
         try:
@@ -230,31 +250,45 @@ def generate_conversation_audio(conv: dict, uid: str, idx: int, tmpdir: str) -> 
             combined += segment + silence
         except Exception as e:
             print(f"    ⚠️  会話行生成失敗: {e}")
+
     filename = f"ep_{uid}_conv{idx}.mp3"
     filepath = str(Path(tmpdir) / filename)
     combined.export(filepath, format="mp3")
     return filename, filepath
 
+# ═══════════════════════════════════════════════
+#   HTML builders
+# ═══════════════════════════════════════════════
+LEVEL_STYLE = {
+    "beginner":     "background:#e8f5e9;color:#2e7d32",
+    "intermediate": "background:#fff8e1;color:#f57f17",
+    "advanced":     "background:#fce4ec;color:#c62828"
+}
+
+REG_META = {
+    "neutral": {"cls": "rn", "lbl": "● Neutral", "cb": "cn"},
+    "polite":  {"cls": "rp", "lbl": "● Polite",  "cb": "cp"},
+    "casual":  {"cls": "rc", "lbl": "● Casual",  "cb": "cc"},
+}
+
 def highlight_phrase(text: str, phrase: str) -> str:
     pattern = re.compile(re.escape(phrase), re.IGNORECASE)
     return pattern.sub(
-        f'<span class="ep-highlight">{phrase}</span>',
+        f'<span class="hl">{phrase}</span>',
         text
     )
 
 def build_voice_buttons_front(audio_list):
-    """表面用：[sound:]タグで自動再生"""
     buttons = ""
     for item in audio_list:
         v = item["voice"]
         f = item["filename"]
         bg = "#ebf4ff" if v["gender"] == "male" else "#f0fff4"
         fg = "#2b6cb0" if v["gender"] == "male" else "#276749"
-        buttons += f"""<div class="ep-vbtn"><div class="ep-vplay" style="background:{bg};color:{fg};">&#9654;</div><div class="ep-vinfo"><div class="ep-vname">{v['name']}</div><div class="ep-vdesc">{v['gender']} &middot; {v['desc']}</div></div>[sound:{f}]</div>"""
+        buttons += f'<div class="vbtn"><div class="vp" style="background:{bg};color:{fg};">&#9654;</div><div><div class="vn">{v["name"]}</div><div class="vd">{v["gender"]} &middot; {v["desc"]}</div></div>[sound:{f}]</div>'
     return buttons
 
 def build_voice_buttons_back(audio_list):
-    """裏面用：クリック時のみ再生（audioタグ + JS）"""
     buttons = ""
     for i, item in enumerate(audio_list):
         v = item["voice"]
@@ -262,7 +296,7 @@ def build_voice_buttons_back(audio_list):
         bg = "#ebf4ff" if v["gender"] == "male" else "#f0fff4"
         fg = "#2b6cb0" if v["gender"] == "male" else "#276749"
         aid = f"va_{i}"
-        buttons += f"""<div class="ep-vbtn" onclick="document.getElementById('{aid}').play()" style="cursor:pointer;"><div class="ep-vplay" style="background:{bg};color:{fg};">&#9654;</div><div class="ep-vinfo"><div class="ep-vname">{v['name']}</div><div class="ep-vdesc">{v['gender']} &middot; {v['desc']}</div></div><audio id="{aid}" src="{f}"></audio></div>"""
+        buttons += f'<div class="vbtn" onclick="document.getElementById(\'{aid}\').play()" style="cursor:pointer;"><div class="vp" style="background:{bg};color:{fg};">&#9654;</div><div><div class="vn">{v["name"]}</div><div class="vd">{v["gender"]} &middot; {v["desc"]}</div></div><audio id="{aid}" src="{f}"></audio></div>'
     return buttons
 
 def build_front(audio_list, content):
@@ -271,100 +305,88 @@ def build_front(audio_list, content):
     buttons = build_voice_buttons_front(audio_list)
     return f"""<div class="ep-front">
 <span class="ep-badge" style="{style}">{lvl.upper()}</span>
-<div class="ep-label">&#127925; Listen &amp; recall</div>
-<div class="ep-vgrid">{buttons}</div>
+<div class="sec-label">&#9835; Listen &amp; recall</div>
+<div class="vgrid">{buttons}</div>
 </div>"""
 
 def build_back(audio_list, conv_files, content):
     lvl   = content.get("level", "intermediate")
     style = LEVEL_STYLE.get(lvl, LEVEL_STYLE["intermediate"])
+    phrase = content["phrase_display"]
 
-    # 会話3つ（個別音声ボタン付き）
+    # Sentence (Neutral)
+    audio_text_hl = highlight_phrase(content["audio_text"], phrase)
+    brian_filename = audio_list[0]["filename"] if audio_list else ""
+    brian_btn = f'<div class="splay" onclick="document.getElementById(\'brian_a\').play()">&#9654;</div><audio id="brian_a" src="{brian_filename}"></audio>' if brian_filename else ""
+
+    # Conversations
     convs_html = ""
-    for i, (conv, (conv_filename, _)) in enumerate(zip(content["conversations"], conv_files), 1):
+    for conv, (conv_filename, _) in zip(content["conversations"], conv_files):
+        reg = conv.get("register", "neutral")
+        r = REG_META.get(reg, REG_META["neutral"])
         lines_html = ""
         for ln in conv["lines"]:
-            name = "A" if ln["speaker"] == "A" else "B"
-            cls  = "ep-sa" if ln["speaker"] == "A" else "ep-sb"
-            text_hl = highlight_phrase(ln["text"], content["phrase_display"])
-            lines_html += f'<p><span class="{cls}">{name}:</span> {text_hl}</p>'
-
-        cid = f"conv_{i}"
-        convs_html += f"""<div class="ep-conv-block">
-  <audio id="{cid}" src="{conv_filename}"></audio>
-  <div class="ep-conv-header" onclick="document.getElementById('{cid}').play()" style="cursor:pointer;">
-    <div class="ep-conv-setting">&#128205; {conv['setting']}</div>
-    <div class="ep-conv-play-btn">&#9654; Play</div>
-  </div>
-  <div class="ep-lines">{lines_html}</div>
-</div>"""
+            sc = "sa" if ln["speaker"] == "A" else "sb2"
+            text_hl = highlight_phrase(ln["text"], phrase)
+            lines_html += f'<p><span class="{sc}">{ln["speaker"]}:</span> {text_hl}</p>'
+        cid = f"conv_{conv_filename}"
+        convs_html += f'''<span class="rl {r['cls']}">{r['lbl']}</span>
+<div class="cb {r['cb']}">[sound:{conv_filename}]
+  <div class="ch"><div class="cs">&#128205; {conv['setting']}</div><div class="cplay">&#9654; Play</div></div>
+  <div class="cl">{lines_html}</div>
+</div>'''
 
     # Who to use
-    who_rows = ""
+    who_html = '<div class="who-tbl">'
     for w in content["who_to_use"]:
-        icon, label, fg, bg = STATUS_MAP.get(w["status"], STATUS_MAP["ok"])
-        note_html = f' <span class="ep-tbl-note">· {w["note"]}</span>' if w.get("note") else ""
-        who_rows += f'<tr><td class="ep-tbl-who">{w["who"]}</td><td><span class="ep-status" style="color:{fg};background:{bg};">{icon} {label}</span>{note_html}</td></tr>'
+        reg = w.get("register", "neutral")
+        r = REG_META.get(reg, REG_META["neutral"])
+        st = w.get("status", "best")
+        if st == "best":
+            st_html = '<span class="st sbest">⭐ Best</span>'
+        else:
+            st_html = '<span class="st sok">🟢 OK</span>'
+        note_html = f'<div class="wd">{w["note"]}</div>' if st == "ok" and w.get("note") else ""
+        who_html += f'<div class="wr"><div class="wl"><span class="rl {r["cls"]}" style="margin:0">{r["lbl"]}</span></div>{st_html}{note_html}</div>'
+    who_html += '</div>'
 
-    # Also say
+    # Also say (only if not all best)
     also_html = ""
-    for a in content["also_say"]:
-        also_html += f'<div class="ep-also-row"><div class="ep-also-who">{a["who"]}</div><div class="ep-also-phrase">{a["phrase"]}</div><div class="ep-also-note">&#8594; {a["note"]}</div></div>'
+    also_items = content.get("also_say", [])
+    if also_items:
+        also_html = '<div class="sec-label">&#128260; What to say instead — and why it\'s different</div>'
+        for a in also_items:
+            reg = a.get("register", "neutral")
+            r = REG_META.get(reg, REG_META["neutral"])
+            phrase_hl = highlight_phrase(a["phrase"], a["phrase"])
+            ex_hl = highlight_phrase(a.get("example", ""), a["phrase"])
+            also_html += f'''<div class="ab">
+<span class="rl {r['cls']}">{r['lbl']}</span>
+<div class="ap">{phrase_hl}</div>
+<div class="ae">{ex_hl}</div>
+<div class="an">&#8594; {a['note']}</div>
+</div>'''
 
-    # Related
-    related_html = ""
-    for r in content["related"]:
-        fg, bg = PRIO_STYLE[r["priority"]][1], PRIO_STYLE[r["priority"]][2]
-        label = PRIO_STYLE[r["priority"]][0]
-        related_html += f'<div class="ep-rel-row"><span class="ep-prio" style="color:{fg};background:{bg};">{label}</span><span class="ep-rel-phrase">{r["phrase"]}</span><span class="ep-rel-note">&#8594; {r["note"]}</span></div>'
-
-    # 音声ボタン（一番下・クリック再生）
-    buttons = build_voice_buttons_back(audio_list)
-
-    # audio_textのフレーズをハイライト
-    audio_text_hl = highlight_phrase(content["audio_text"], content["phrase_display"])
+    # Voice buttons (back — click only)
+    buttons_back = build_voice_buttons_back(audio_list)
 
     return f"""<div class="ep-back">
-<div class="ep-inner">
 <span class="ep-badge" style="{style}">{lvl.upper()}</span>
-<div class="ep-audio-sentence-back">{audio_text_hl}</div>
-
-<div class="ep-label">&#128161; What it actually means</div>
-<div class="ep-box ep-meaning">{content['simple_meaning']}</div>
-
-<div class="ep-label">&#128172; Real-life conversations</div>
+<div class="sentence-wrap">
+  <div class="sentence"><div style="margin-bottom:5px"><span class="rl rn">● Neutral</span></div>{audio_text_hl}</div>
+  {brian_btn}
+</div>
+<div class="sec-label">&#128161; What it actually means</div>
+<div class="box meaning">{content['simple_meaning']}</div>
+<div class="sec-label">&#128172; Real-life conversations</div>
 {convs_html}
-
-<div class="ep-label">&#128100; Who can you say this to?</div>
-<table class="ep-tbl"><tbody>{who_rows}</tbody></table>
-
-<div class="ep-label">&#128260; What to say instead — and why it's different</div>
-<div class="ep-also">{also_html}</div>
-
-<div class="ep-label">&#128218; Learn these next — and exactly when to use them</div>
-<div class="ep-related">{related_html}</div>
-
-<div class="ep-label" style="margin-top:20px;border-top:1px solid #e2e8f0;padding-top:14px;">&#127925; Listen to the phrase in all voices</div>
-<div class="ep-vgrid">{buttons}</div>
-</div></div>"""
-
-LEVEL_STYLE = {
-    "beginner":     "background:#e8f5e9;color:#2e7d32",
-    "intermediate": "background:#fff8e1;color:#f57f17",
-    "advanced":     "background:#fce4ec;color:#c62828"
-}
-
-STATUS_MAP = {
-    "best":  ("⭐", "Best",  "#2d6a4f", "#d8f3dc"),
-    "ok":    ("🟢", "OK",    "#1d6fa4", "#e8f4fd"),
-    "avoid": ("🔴", "Avoid", "#9b2226", "#fce4e4"),
-}
-
-PRIO_STYLE = {
-    "must":  ("must",  "#9b2226", "#fce4e4"),
-    "soon":  ("soon",  "#7d4e00", "#fff3cd"),
-    "later": ("later", "#5f5e5a", "#f1efe8"),
-}
+<div class="sec-label">&#128100; Who can you say this to?</div>
+{who_html}
+{also_html}
+<div class="divider"></div>
+<div class="sec-label">&#9835; Listen in all voices</div>
+<div class="vgrid">{buttons_back}</div>
+</div>"""
 
 CARD_CSS = """
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -373,50 +395,55 @@ CARD_CSS = """
   font-size: 15px; line-height: 1.6; color: #1a1a2e;
   background: #f4f6f9; min-height: 100vh;
 }
-.ep-front { max-width: 560px; margin: 0 auto; padding: 24px 16px; }
-.ep-back { max-width: 560px; margin: 0 auto; }
-.ep-inner { padding: 16px 16px 24px; }
+.ep-front { max-width: 560px; margin: 0 auto; padding: 24px 16px; text-align: center; }
+.ep-back  { max-width: 560px; margin: 0 auto; padding: 16px 16px 28px; }
 .ep-badge { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: 1.2px; padding: 3px 12px; border-radius: 20px; margin-bottom: 16px; }
-.ep-highlight { color: #2b6cb0; font-weight: 700; background: #ebf4ff; padding: 0 2px; border-radius: 3px; }
-.ep-label { font-size: 10px; font-weight: 700; color: #8a9ab5; letter-spacing: 1px; text-transform: uppercase; margin: 16px 0 8px; }
-.ep-vgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
-.ep-vbtn { display: flex; align-items: center; gap: 7px; padding: 7px 9px; border: 1px solid #e2e8f0; border-radius: 8px; background: #ffffff; }
-.ep-vplay { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 10px; }
-.ep-vname { font-size: 12px; font-weight: 700; color: #2d3748; }
-.ep-vdesc { font-size: 10px; color: #a0aec0; }
-.ep-box { border-radius: 0 8px 8px 0; padding: 9px 12px; font-size: 13px; }
-.ep-audio-sentence-back { font-size: 15px; line-height: 1.7; color: #2d3748; text-align: center; margin: 4px 0 14px; padding: 10px 14px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; }
-.ep-meaning { background: #ebf4ff; border-left: 3px solid #4299e1; }
-.ep-conv-block { background: #f0fff4; border-left: 3px solid #48bb78; border-radius: 0 8px 8px 0; margin-bottom: 10px; overflow: hidden; }
-.ep-conv-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px 6px; border-bottom: 1px solid #c6f6d5; }
-.ep-conv-setting { font-size: 11px; color: #276749; font-style: italic; flex: 1; }
-.ep-conv-play-btn { font-size: 12px; color: #2b6cb0; font-weight: 700; white-space: nowrap; padding-left: 8px; }
-.ep-lines { padding: 8px 12px 10px; }
-.ep-lines p { font-size: 13px; margin-bottom: 5px; line-height: 1.55; }
-.ep-sa { color: #2b6cb0; font-weight: 700; }
-.ep-sb { color: #c05621; font-weight: 700; }
-.ep-tbl { width: 100%; border-collapse: collapse; font-size: 12px; background: #fff; border-radius: 8px; overflow: hidden; border: 1px solid #e2e8f0; }
-.ep-tbl-who { padding: 7px 10px; color: #4a5568; border-bottom: 1px solid #f0f4f8; width: 45%; }
-.ep-tbl tr:last-child td { border-bottom: none; }
-.ep-tbl td:last-child { padding: 7px 10px; border-bottom: 1px solid #f0f4f8; }
-.ep-status { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 20px; }
-.ep-tbl-note { font-size: 11px; color: #718096; }
-.ep-also { display: flex; flex-direction: column; gap: 6px; }
-.ep-also-row { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 10px; }
-.ep-also-who { font-size: 10px; color: #8a9ab5; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 2px; }
-.ep-also-phrase { font-size: 13px; font-weight: 700; color: #2d3748; margin-bottom: 3px; }
-.ep-also-note { font-size: 11px; color: #718096; }
-.ep-related { display: flex; flex-direction: column; gap: 5px; }
-.ep-rel-row { display: flex; align-items: baseline; gap: 7px; font-size: 12px; flex-wrap: wrap; padding: 4px 0; }
-.ep-prio { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 20px; white-space: nowrap; }
-.ep-rel-phrase { font-weight: 700; color: #2d3748; }
-.ep-rel-note { color: #718096; font-size: 11px; }
+.hl { color: #2b6cb0; font-weight: 700; background: #ebf4ff; padding: 0 2px; border-radius: 3px; }
+.sec-label { font-size: 10px; font-weight: 700; color: #8a9ab5; letter-spacing: 1px; text-transform: uppercase; margin: 14px 0 8px; }
+.vgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.vbtn { display: flex; align-items: center; gap: 7px; padding: 7px 9px; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; }
+.vp { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 10px; }
+.vn { font-size: 12px; font-weight: 700; color: #2d3748; }
+.vd { font-size: 10px; color: #a0aec0; }
+.rl { display: inline-flex; align-items: center; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px; margin-bottom: 6px; }
+.rn { background: #e8f4fd; color: #1d6fa4; }
+.rp { background: #fef9e7; color: #7d4e00; }
+.rc { background: #e8f5e9; color: #2e7d32; }
+.sentence-wrap { display: flex; align-items: center; gap: 8px; margin: 0 0 14px; }
+.sentence { font-size: 14px; line-height: 1.7; color: #2d3748; padding: 10px 14px; background: #fff; border-radius: 8px; border: 1px solid #e2e8f0; flex: 1; }
+.splay { width: 32px; height: 32px; border-radius: 50%; background: #ebf4ff; color: #2b6cb0; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; font-size: 12px; border: 1px solid #bee3f8; }
+.box { border-radius: 0 8px 8px 0; padding: 9px 12px; font-size: 13px; line-height: 1.6; }
+.meaning { background: #ebf4ff; border-left: 2px solid #4299e1; }
+.cb { border-radius: 0 8px 8px 0; margin-bottom: 10px; }
+.cn { background: #f0f7ff; border-left: 2px solid #4299e1; }
+.cp { background: #fefce8; border-left: 2px solid #d97706; }
+.cc { background: #f0fff4; border-left: 2px solid #48bb78; }
+.ch { display: flex; align-items: center; justify-content: space-between; padding: 7px 12px 5px; border-bottom: 1px solid rgba(0,0,0,0.06); }
+.cs { font-size: 11px; color: #718096; font-style: italic; flex: 1; }
+.cplay { font-size: 11px; color: #2b6cb0; font-weight: 700; cursor: pointer; padding-left: 8px; }
+.cl { padding: 7px 12px 9px; }
+.cl p { font-size: 13px; margin-bottom: 4px; line-height: 1.5; }
+.sa { color: #2b6cb0; font-weight: 700; }
+.sb2 { color: #c05621; font-weight: 700; }
+.who-tbl { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
+.wr { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-bottom: 1px solid #f0f4f8; }
+.wr:last-child { border-bottom: none; }
+.wl { flex-shrink: 0; width: 66px; }
+.wd { color: #718096; font-size: 11px; flex: 1; }
+.st { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 20px; flex-shrink: 0; }
+.sbest { background: #d8f3dc; color: #2d6a4f; }
+.sok { background: #e8f4fd; color: #1d6fa4; }
+.ab { margin-bottom: 9px; }
+.ap { font-size: 13px; font-weight: 700; color: #2d3748; margin-bottom: 3px; }
+.ae { font-size: 12px; color: #718096; line-height: 1.5; margin-bottom: 2px; font-style: italic; }
+.an { font-size: 11px; color: #a0aec0; }
+.divider { border: none; border-top: 1px solid #e2e8f0; margin: 14px 0 10px; }
 """
 
 def build_anki_model():
     return genanki.Model(
         ANKI_MODEL_ID,
-        "EP_EnglishPhrase_v6",
+        "EP_EnglishPhrase_v7",
         fields=[{"name": "Front"}, {"name": "Back"}],
         templates=[{"name": "Card 1", "qfmt": "{{Front}}", "afmt": "{{Back}}"}],
         css=CARD_CSS
@@ -461,7 +488,7 @@ def main():
                 print("  ⏳ Gemini でコンテンツ生成中...")
                 content = generate_content(client, phrase)
 
-                print("  🎙️  8音声を生成中...")
+                print("  🎙️  音声を生成中...")
                 audio_list = generate_all_audio(content["audio_text"], uid, tmpdir)
                 all_media.extend([a["filepath"] for a in audio_list])
 
