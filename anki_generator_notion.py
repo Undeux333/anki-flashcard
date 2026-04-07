@@ -16,7 +16,8 @@ from pydub import AudioSegment
 GEMINI_API_KEY     = os.environ.get("GEMINI_API_KEY", "")
 NOTION_TOKEN       = os.environ.get("NOTION_TOKEN", "")
 NOTION_DATABASE_ID = os.environ.get("NOTION_DATABASE_ID", "")
-GEMINI_MODEL       = "gemini-3.1-flash-lite-preview"
+GEMINI_MODEL          = "gemini-3.1-flash-lite-preview"
+GEMINI_FALLBACK_MODEL = "gemini-2.0-flash-lite"
 TTS_RATE           = "+0%"
 NOTION_VERSION     = "2022-06-28"
 OUTPUT_DIR         = Path("output")
@@ -203,14 +204,23 @@ Return ONLY valid JSON (no markdown, no backticks):
 }}"""
 
     import time
-    for attempt in range(4):
+    # Attempt order: primary × 2 → fallback × 2
+    # Waits: 10s, 10s, 10s (much shorter — 503 spikes are brief)
+    schedule = [
+        (GEMINI_MODEL,          0),
+        (GEMINI_MODEL,         10),
+        (GEMINI_FALLBACK_MODEL, 10),
+        (GEMINI_FALLBACK_MODEL, 10),
+    ]
+    last_err = None
+    for attempt, (model, wait) in enumerate(schedule):
         try:
-            if attempt > 0:
-                wait = 30 * attempt
-                print(f"    ⏳ Gemini混雑 — {wait}秒待機してリトライ ({attempt}/3)...")
+            if wait > 0:
+                label = "プライマリ" if model == GEMINI_MODEL else "フォールバック"
+                print(f"    ⏳ Gemini混雑 — {wait}秒待機後に{label}モデルでリトライ ({attempt}/3)...")
                 time.sleep(wait)
             response = client.models.generate_content(
-                model=GEMINI_MODEL,
+                model=model,
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     response_mime_type="application/json",
@@ -226,8 +236,8 @@ Return ONLY valid JSON (no markdown, no backticks):
             content = _clean_gemini_text(content)
             return _enforce_also_say(content)
         except Exception as e:
-            if attempt == 3:
-                raise e
+            last_err = e
+    raise last_err
 
 def _clean_gemini_text(content: dict) -> dict:
     """
@@ -330,6 +340,17 @@ def generate_conversation_audio(conv: dict, uid: str, tag: str, tmpdir: str) -> 
 # ═══════════════════════════════════════════════
 #   Highlight helpers
 # ═══════════════════════════════════════════════
+def _get_phrase_forms(phrase: str) -> list[str]:
+    """
+    Return the phrase and a punctuation-stripped variant so matching works
+    regardless of whether Gemini appended a period/comma to the phrase.
+    """
+    forms = [phrase]
+    stripped = phrase.rstrip('.,!?;:')
+    if stripped and stripped != phrase:
+        forms.append(stripped)
+    return forms
+
 def normalize_text(text: str) -> str:
     """Normalize curly quotes and dashes to ASCII equivalents for matching."""
     return (text
@@ -453,7 +474,7 @@ def build_back(audio_list, conv_files, content):
     # Build highlight forms purely from phrase_display and also_say phrases.
     # We deliberately ignore Gemini's highlight_forms because it frequently
     # includes unrelated words (e.g. "I", "the", "Yeah") causing false highlights.
-    main_forms = [content["phrase_display"]]
+    main_forms = _get_phrase_forms(content["phrase_display"])
 
     # Per-register highlight map: only the alternative phrase itself
     also_say_map = {}
@@ -461,7 +482,7 @@ def build_back(audio_list, conv_files, content):
         reg = a.get("register", "")
         alt_phrase = a.get("phrase", "")
         if reg and alt_phrase:
-            also_say_map[reg] = [alt_phrase]
+            also_say_map[reg] = _get_phrase_forms(alt_phrase)
 
     who_status = {w["register"]: w.get("status", "best") for w in content.get("who_to_use", [])}
     alt_registers = {r for r, s in who_status.items() if s in ("ok", "avoid")}
@@ -522,7 +543,7 @@ def build_back(audio_list, conv_files, content):
         for a in also_items:
             reg = a.get("register", "neutral")
             r = REG_META.get(reg, REG_META["neutral"])
-            alt_forms = [a.get("phrase", "")]  # only the phrase itself, not Gemini's list
+            alt_forms = _get_phrase_forms(a.get("phrase", ""))  # phrase + stripped variant
             phrase_hl = highlight_any_form(normalize_text(a["phrase"]), alt_forms)
             ex_hl     = highlight_any_form(normalize_text(a.get("example", "")), alt_forms)
             also_inner += (
@@ -600,7 +621,7 @@ CARD_CSS = """
 }
 .ep-front { max-width: 560px; margin: 0 auto; padding: 24px 16px; text-align: center; }
 .ep-back  { max-width: 560px; margin: 0 auto; padding: 16px 16px 28px; }
-.hl { color: #2b6cb0; background: #ebf4ff; }
+.hl { color: #2b6cb0; text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 2px; font-weight: 500; }
 .sec-label { font-size: 10px; font-weight: 700; color: #8a9ab5; letter-spacing: 1px; text-transform: uppercase; margin: 0 0 8px; }
 .divider { border: none; border-top: 1px solid #e2e8f0; margin: 14px 0 14px; }
 .vgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
