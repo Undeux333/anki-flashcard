@@ -27,7 +27,8 @@ STATUS_PENDING = "Pending"
 STATUS_DONE    = "Done"
 STATUS_ERROR   = "Error"
 
-ANKI_MODEL_ID = 1607392332
+ANKI_MODEL_ID = 1607392333
+FORCE_REGEN = os.environ.get("FORCE_REGEN", "false").lower() == "true"
 ANKI_DECK_ID  = 2059400110
 
 VOICES = [
@@ -59,14 +60,19 @@ def notion_headers():
 
 def get_pending_phrases():
     url = f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}/query"
-    payload = {
-        "filter": {
-            "or": [
-                {"property": PROP_STATUS, "select": {"is_empty": True}},
-                {"property": PROP_STATUS, "select": {"equals": STATUS_ERROR}}
-            ]
+    if FORCE_REGEN:
+        # No filter — fetch ALL entries regardless of status
+        payload = {}
+        print("  ⚠️  FORCE_REGEN=true: 全エントリを再生成します (Done含む)")
+    else:
+        payload = {
+            "filter": {
+                "or": [
+                    {"property": PROP_STATUS, "select": {"is_empty": True}},
+                    {"property": PROP_STATUS, "select": {"equals": STATUS_ERROR}}
+                ]
+            }
         }
-    }
     res = requests.post(url, headers=notion_headers(), json=payload, timeout=15)
     res.raise_for_status()
     results = []
@@ -208,7 +214,7 @@ Return ONLY valid JSON (no markdown, no backticks):
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     response_mime_type="application/json",
-                    temperature=0.8
+                    temperature=0.4
                 )
             )
             text = response.text.strip()
@@ -217,10 +223,37 @@ Return ONLY valid JSON (no markdown, no backticks):
                 if text.startswith("json"):
                     text = text[4:]
             content = json.loads(text.strip())
+            content = _clean_gemini_text(content)
             return _enforce_also_say(content)
         except Exception as e:
             if attempt == 3:
                 raise e
+
+def _clean_gemini_text(content: dict) -> dict:
+    """
+    Strip extra whitespace from Gemini-generated text fields.
+    temperature=0.8 can occasionally produce extra spaces mid-word.
+    """
+    import re as _re
+
+    def _clean(s: str) -> str:
+        if not isinstance(s, str):
+            return s
+        # Collapse multiple consecutive spaces into one
+        s = _re.sub(r' {2,}', ' ', s)
+        return s.strip()
+
+    content["audio_text"]    = _clean(content.get("audio_text", ""))
+    content["simple_meaning"] = _clean(content.get("simple_meaning", ""))
+    for conv in content.get("conversations", []):
+        conv["setting"] = _clean(conv.get("setting", ""))
+        for ln in conv.get("lines", []):
+            ln["text"] = _clean(ln.get("text", ""))
+    for a in content.get("also_say", []):
+        a["phrase"]   = _clean(a.get("phrase", ""))
+        a["example"]  = _clean(a.get("example", ""))
+        a["note"]     = _clean(a.get("note", ""))
+    return content
 
 def _enforce_also_say(content: dict) -> dict:
     """
@@ -323,7 +356,7 @@ def highlight_any_form(text: str, forms: list[str]) -> str:
     cleaned: list[str] = []
     for f in forms:
         fn = normalize_text(f).strip()
-        if len(fn) < 2:
+        if len(fn) < 3:
             continue
         key = fn.lower()
         if key not in seen:
@@ -564,7 +597,7 @@ CARD_CSS = """
 }
 .ep-front { max-width: 560px; margin: 0 auto; padding: 24px 16px; text-align: center; }
 .ep-back  { max-width: 560px; margin: 0 auto; padding: 16px 16px 28px; }
-.hl { color: #2b6cb0; font-weight: 700; background: #ebf4ff; padding: 1px 0; border-radius: 3px; }
+.hl { color: #2b6cb0; background: #ebf4ff; }
 .sec-label { font-size: 10px; font-weight: 700; color: #8a9ab5; letter-spacing: 1px; text-transform: uppercase; margin: 0 0 8px; }
 .divider { border: none; border-top: 1px solid #e2e8f0; margin: 14px 0 14px; }
 .vgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
