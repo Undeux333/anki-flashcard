@@ -17,7 +17,6 @@ GEMINI_API_KEY     = os.environ.get("GEMINI_API_KEY", "")
 NOTION_TOKEN       = os.environ.get("NOTION_TOKEN", "")
 NOTION_DATABASE_ID = os.environ.get("NOTION_DATABASE_ID", "")
 GEMINI_MODEL          = "gemini-3.1-flash-lite-preview"
-GEMINI_FALLBACK_MODEL = "gemini-2.5-flash-lite"  # 2.0-flash-lite は無料枠廃止 (limit:0)
 TTS_RATE           = "+0%"
 NOTION_VERSION     = "2022-06-28"
 OUTPUT_DIR         = Path("output")
@@ -219,41 +218,22 @@ Return ONLY valid JSON (no markdown, no backticks):
   "level": "beginner or intermediate or advanced"
 }}"""
 
-    import time
-    # Attempt order: primary × 2 → fallback × 2
-    # Waits: 10s, 10s, 10s (much shorter — 503 spikes are brief)
-    schedule = [
-        (GEMINI_MODEL,          0),
-        (GEMINI_MODEL,         10),
-        (GEMINI_FALLBACK_MODEL, 10),
-        (GEMINI_FALLBACK_MODEL, 10),
-    ]
-    last_err = None
-    for attempt, (model, wait) in enumerate(schedule):
-        try:
-            if wait > 0:
-                label = "プライマリ" if model == GEMINI_MODEL else "フォールバック"
-                print(f"    ⏳ Gemini混雑 — {wait}秒待機後に{label}モデルでリトライ ({attempt}/3)...")
-                time.sleep(wait)
-            response = client.models.generate_content(
-                model=model,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    temperature=0.4
-                )
-            )
-            text = response.text.strip()
-            if text.startswith("```"):
-                text = text.split("```")[1]
-                if text.startswith("json"):
-                    text = text[4:]
-            content = json.loads(text.strip())
-            content = _clean_gemini_text(content)
-            return _validate_best_conversations(_enforce_also_say(content))
-        except Exception as e:
-            last_err = e
-    raise last_err
+    response = client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            temperature=0.4
+        )
+    )
+    text = response.text.strip()
+    if text.startswith("```"):
+        text = text.split("```")[1]
+        if text.startswith("json"):
+            text = text[4:]
+    content = json.loads(text.strip())
+    content = _clean_gemini_text(content)
+    return _validate_best_conversations(_enforce_also_say(content))
 
 def _validate_best_conversations(content: dict) -> dict:
     """
@@ -562,6 +542,45 @@ def build_back(audio_list, conv_file, content, best_reg: str):
 {D}<div class="sec-label">&#9835; Listen in all voices</div>
 <div class="vgrid">{buttons_back}</div>
 </div>"""
+
+
+CARD_CSS = """
+* { box-sizing: border-box; margin: 0; padding: 0; }
+.card {
+  font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 15px; line-height: 1.6; color: #1a1a2e;
+  background: #f4f6f9; min-height: 100vh;
+}
+.ep-front { max-width: 560px; margin: 0 auto; padding: 24px 16px; text-align: center; }
+.ep-back  { max-width: 560px; margin: 0 auto; padding: 16px 16px 28px; }
+.hl { color: #c0392b; font-weight: 700; }
+.sec-label { font-size: 10px; font-weight: 700; color: #8a9ab5; letter-spacing: 1px; text-transform: uppercase; margin: 0 0 8px; }
+.divider { border: none; border-top: 1px solid #e2e8f0; margin: 14px 0 14px; }
+.vgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.vbtn { display: flex; align-items: center; gap: 7px; padding: 7px 9px; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; cursor: pointer; }
+audio { display: none; }
+.vp { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 10px; }
+.vn { font-size: 12px; font-weight: 700; color: #2d3748; }
+.vd { font-size: 10px; color: #a0aec0; }
+.rl { display: inline-flex; align-items: center; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px; margin-bottom: 6px; }
+.rn { background: #e8f4fd; color: #1d6fa4; }
+.rp { background: #fef9e7; color: #7d4e00; }
+.rc { background: #e8f5e9; color: #2e7d32; }
+.sentence-wrap { display: flex; align-items: center; gap: 8px; margin: 0 0 0; }
+.sentence { font-size: 14px; line-height: 1.7; color: #2d3748; padding: 10px 14px; background: #fff; border-radius: 8px; border: 1px solid #e2e8f0; flex: 1; }
+.splay { width: 32px; height: 32px; border-radius: 50%; background: #ebf4ff; color: #2b6cb0; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; font-size: 12px; border: 1px solid #bee3f8; }
+.box { border-radius: 0 8px 8px 0; padding: 9px 12px; font-size: 13px; line-height: 1.6; }
+.meaning { background: #ebf4ff; border-left: 2px solid #4299e1; }
+.cb { border-radius: 0 8px 8px 0; margin-bottom: 10px; }
+.cn { background: #f0f7ff; border-left: 2px solid #4299e1; }
+.cp { background: #fefce8; border-left: 2px solid #d97706; }
+.cc { background: #f0fff4; border-left: 2px solid #48bb78; }
+.ch { display: flex; align-items: center; justify-content: space-between; padding: 7px 12px 5px; border-bottom: 1px solid rgba(0,0,0,0.06); }
+.cs { font-size: 11px; color: #718096; font-style: italic; flex: 1; }
+.cplay { font-size: 11px; color: #2b6cb0; font-weight: 700; cursor: pointer; padding-left: 8px; }
+.cl { padding: 7px 12px 9px; }
+.cl p { font-size: 13px; margin-bottom: 4px; line-height: 1.5; }
+"""
 
 
 def build_anki_model():
