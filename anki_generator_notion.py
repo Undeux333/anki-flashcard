@@ -309,27 +309,52 @@ def normalize_text(text: str) -> str:
 
 def highlight_any_form(text: str, forms: list[str]) -> str:
     """
-    Highlight every form in `forms` wherever it appears in `text`.
-    Normalizes quotes before matching so curly-quote mismatches don't break highlighting.
-    Processes longest forms first to avoid partial overlaps.
+    Single-pass highlight: builds one alternation regex from all forms and applies
+    it ONCE to the original text. This prevents any subsequent pass from matching
+    inside already-inserted <span> tags and corrupting the HTML.
+    Word boundaries are added at word-character edges to prevent mid-word matches.
     """
     if not forms or not text:
         return text
     text_n = normalize_text(text)
-    # Sort longest first to prevent shorter sub-phrases from matching inside longer ones
-    for form in sorted(forms, key=len, reverse=True):
-        form_n = normalize_text(form).strip()
-        if not form_n:
+
+    # Deduplicate and discard single-character forms
+    seen: set[str] = set()
+    cleaned: list[str] = []
+    for f in forms:
+        fn = normalize_text(f).strip()
+        if len(fn) < 2:
             continue
+        key = fn.lower()
+        if key not in seen:
+            seen.add(key)
+            cleaned.append(fn)
+
+    if not cleaned:
+        return text_n
+
+    # Longest first so the alternation regex prefers the longest match
+    cleaned.sort(key=len, reverse=True)
+
+    parts: list[str] = []
+    for fn in cleaned:
         try:
-            pattern = re.compile(re.escape(form_n), re.IGNORECASE)
-            text_n = pattern.sub(
-                lambda m: f'<span class="hl">{m.group()}</span>',
-                text_n
-            )
-        except re.error:
+            escaped = re.escape(fn)
+            # Word boundary only at edges that are word characters (letters/digits)
+            prefix = r'\b' if fn[0].isalnum() else ""
+            suffix = r'\b' if fn[-1].isalnum() else ""
+            parts.append(prefix + escaped + suffix)
+        except (re.error, IndexError):
             continue
-    return text_n
+
+    if not parts:
+        return text_n
+
+    try:
+        pattern = re.compile("|".join(parts), re.IGNORECASE)
+        return pattern.sub(lambda m: f'<span class="hl">{m.group()}</span>', text_n)
+    except re.error:
+        return text_n
 
 # ═══════════════════════════════════════════════
 #   HTML builders
@@ -539,11 +564,12 @@ CARD_CSS = """
 }
 .ep-front { max-width: 560px; margin: 0 auto; padding: 24px 16px; text-align: center; }
 .ep-back  { max-width: 560px; margin: 0 auto; padding: 16px 16px 28px; }
-.hl { color: #2b6cb0; font-weight: 700; background: #ebf4ff; padding: 0 2px; border-radius: 3px; }
+.hl { color: #2b6cb0; font-weight: 700; background: #ebf4ff; padding: 1px 0; border-radius: 3px; }
 .sec-label { font-size: 10px; font-weight: 700; color: #8a9ab5; letter-spacing: 1px; text-transform: uppercase; margin: 0 0 8px; }
 .divider { border: none; border-top: 1px solid #e2e8f0; margin: 14px 0 14px; }
 .vgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
 .vbtn { display: flex; align-items: center; gap: 7px; padding: 7px 9px; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; cursor: pointer; }
+audio { display: none; }
 .vp { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 10px; }
 .vn { font-size: 12px; font-weight: 700; color: #2d3748; }
 .vd { font-size: 10px; color: #a0aec0; }
