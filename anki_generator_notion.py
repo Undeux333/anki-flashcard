@@ -437,6 +437,36 @@ def build_back(audio_list, content, best_reg: str):
 <div class="vgrid">{buttons_back}</div>
 </div>"""
 
+CARD_CSS = """
+* { box-sizing: border-box; margin: 0; padding: 0; }
+.card {
+  font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 15px; line-height: 1.6; color: #1a1a2e;
+  background: #f4f6f9; min-height: 100vh;
+}
+.ep-front { max-width: 560px; margin: 0 auto; padding: 24px 16px; text-align: center; }
+.ep-back  { max-width: 560px; margin: 0 auto; padding: 16px 16px 28px; }
+.hl { color: #c0392b; font-weight: 700; }
+.sec-label { font-size: 10px; font-weight: 700; color: #8a9ab5; letter-spacing: 1px; text-transform: uppercase; margin: 0 0 8px; }
+.divider { border: none; border-top: 1px solid #e2e8f0; margin: 14px 0 14px; }
+.vgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.vbtn { display: flex; align-items: center; gap: 7px; padding: 7px 9px; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; cursor: pointer; }
+audio { display: none; }
+.vp { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 10px; }
+.vn { font-size: 12px; font-weight: 700; color: #2d3748; }
+.vd { font-size: 10px; color: #a0aec0; }
+.rl { display: inline-flex; align-items: center; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px; margin-bottom: 6px; }
+.rn { background: #e8f4fd; color: #1d6fa4; }
+.rp { background: #fef9e7; color: #7d4e00; }
+.rc { background: #e8f5e9; color: #2e7d32; }
+.sentence-wrap { display: flex; align-items: center; gap: 8px; margin: 0 0 0; }
+.sentence { font-size: 14px; line-height: 1.7; color: #2d3748; padding: 10px 14px; background: #fff; border-radius: 8px; border: 1px solid #e2e8f0; flex: 1; }
+.splay { width: 32px; height: 32px; border-radius: 50%; background: #ebf4ff; color: #2b6cb0; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; font-size: 12px; border: 1px solid #bee3f8; }
+.box { border-radius: 0 8px 8px 0; padding: 9px 12px; font-size: 13px; line-height: 1.6; }
+.meaning { background: #ebf4ff; border-left: 2px solid #4299e1; }
+"""
+
+
 def build_anki_model():
     return genanki.Model(
         ANKI_MODEL_ID,
