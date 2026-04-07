@@ -17,7 +17,7 @@ GEMINI_API_KEY     = os.environ.get("GEMINI_API_KEY", "")
 NOTION_TOKEN       = os.environ.get("NOTION_TOKEN", "")
 NOTION_DATABASE_ID = os.environ.get("NOTION_DATABASE_ID", "")
 GEMINI_MODEL          = "gemini-3.1-flash-lite-preview"
-GEMINI_FALLBACK_MODEL = "gemini-2.0-flash-lite"
+GEMINI_FALLBACK_MODEL = "gemini-2.5-flash-lite"  # 2.0-flash-lite は無料枠廃止 (limit:0)
 TTS_RATE           = "+0%"
 NOTION_VERSION     = "2022-06-28"
 OUTPUT_DIR         = Path("output")
@@ -140,6 +140,12 @@ CONVERSATION GENERATION — CORE RULE:
 - "avoid" + no natural alternative → OMIT this register's conversation entirely (do not generate it).
 - CONSISTENCY RULE (critical): If you write a compressed/shortened form in a conversation, that register MUST be "ok" or "avoid", not "best". Never rate "best" if the conversation doesn't use the original phrase.
 
+VERBATIM EXAMPLE — CRITICAL:
+  Target: "That's what I was looking for."  |  casual = "best"
+  WRONG: B: Yes! That's the one I was looking for.  <- "the one" is NOT the original
+  RIGHT: B: Yes! That's what I was looking for.     <- exact original phrase required
+  ANY word substitution (what->the one, etc.) means the register must be "ok" not "best".
+
 highlight_forms: list EVERY exact form that appears in audio_text AND all conversation lines. Use straight apostrophes only.
 
 Return ONLY valid JSON (no markdown, no backticks):
@@ -234,10 +240,32 @@ Return ONLY valid JSON (no markdown, no backticks):
                     text = text[4:]
             content = json.loads(text.strip())
             content = _clean_gemini_text(content)
-            return _enforce_also_say(content)
+            return _validate_best_conversations(_enforce_also_say(content))
         except Exception as e:
             last_err = e
     raise last_err
+
+def _validate_best_conversations(content: dict) -> dict:
+    """
+    Detects cases where Gemini generated a variant phrase (not the original)
+    in a 'best' register conversation — violating the verbatim rule.
+    Logs a warning. Does NOT auto-fix (to preserve audio sync).
+    """
+    who_status = {w["register"]: w.get("status", "best") for w in content.get("who_to_use", [])}
+    phrase_display = content.get("phrase_display", "")
+    forms = _get_phrase_forms(phrase_display)
+    norm_forms = [normalize_text(f).lower() for f in forms]
+
+    for conv in content.get("conversations", []):
+        reg = conv.get("register", "")
+        if who_status.get(reg) != "best":
+            continue
+        all_text = normalize_text(" ".join(ln["text"] for ln in conv.get("lines", []))).lower()
+        if not any(nf in all_text for nf in norm_forms):
+            print(f"    ⚠️  [{reg}] 'best'なのに原文フレーズが会話に見つかりません: {phrase_display!r}")
+            print(f"         → Geminiがvariantを生成した可能性があります。手動確認を推奨します。")
+    return content
+
 
 def _clean_gemini_text(content: dict) -> dict:
     """
