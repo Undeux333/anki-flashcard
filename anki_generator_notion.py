@@ -508,26 +508,15 @@ def build_front(audio_list, content):
 <div class="vgrid">{buttons}</div>
 </div>"""
 
-def build_back(audio_list, conv_files, content):
-    # Build highlight forms purely from phrase_display and also_say phrases.
-    # We deliberately ignore Gemini's highlight_forms because it frequently
-    # includes unrelated words (e.g. "I", "the", "Yeah") causing false highlights.
-    main_forms = _get_phrase_forms(content["phrase_display"])
 
-    # Per-register highlight map: only the alternative phrase itself
-    also_say_map = {}
-    for a in content.get("also_say", []):
-        reg = a.get("register", "")
-        alt_phrase = a.get("phrase", "")
-        if reg and alt_phrase:
-            also_say_map[reg] = _get_phrase_forms(alt_phrase)
-
+def get_best_reg(content: dict) -> str:
+    """Return the first 'best' register, falling back to 'neutral'."""
     who_status = {w["register"]: w.get("status", "best") for w in content.get("who_to_use", [])}
-    alt_registers = {r for r, s in who_status.items() if s in ("ok", "avoid")}
+    return next((r for r in ["neutral", "polite", "casual"] if who_status.get(r) == "best"), "neutral")
 
-    # Determine best register for sentence tag
-    reg_order = ["neutral", "polite", "casual"]
-    best_reg = next((r for r in reg_order if who_status.get(r) == "best"), "neutral")
+
+def build_back(audio_list, conv_file, content, best_reg: str):
+    main_forms = _get_phrase_forms(content["phrase_display"])
     best_r = REG_META.get(best_reg, REG_META["neutral"])
 
     # Sentence + Brian button
@@ -540,95 +529,23 @@ def build_back(audio_list, conv_files, content):
 
     D = '<div class="divider"></div>'
 
-    # ── When to use it ────────────────────────────────────────────
-    who_html = '<div class="who-tbl">'
-    also_by_reg = {a["register"]: a for a in content.get("also_say", [])}
-    for w in content["who_to_use"]:
-        reg = w.get("register", "neutral")
-        r = REG_META.get(reg, REG_META["neutral"])
-        st = w.get("status", "best")
-        is_avoid = st == "avoid"
-        is_best  = st == "best"
-        st_lbl  = "⭐ Best" if is_best else ("🟢 OK" if st == "ok" else "🚫 Avoid")
-        st_cls  = "savoid" if is_avoid else "st"
-        # note and alt stacked in one cell to avoid overflow on narrow screens
-        if is_best:
-            note_alt_html = ""
-        else:
-            note_text = f'<div class="wd">{w["note"]}</div>' if w.get("note") else ""
-            if reg in also_by_reg:
-                alt_phrase = also_by_reg[reg].get("phrase", "")
-                alt_text = f'<div class="walt">&#8594; &ldquo;{alt_phrase}&rdquo;</div>'
-            elif is_avoid or st == "ok":
-                alt_text = '<div class="walt-none">—</div>'
-            else:
-                alt_text = ""
-            note_alt_html = f'<div class="wna">{note_text}{alt_text}</div>'
-        who_html += (
-            f'<div class="wr">'
-            f'<div><span class="rl {r["cls"]}" style="margin:0">{r["lbl"]}</span></div>'
-            f'<span class="{st_cls}">{st_lbl}</span>'
-            f'{note_alt_html}'
-            f'</div>'
-        )
-    who_html += '</div>'
+    # ── Real conversation (best_reg only) ─────────────────────────
+    conv_filename, conv = conv_file  # (filename, conv_dict)
+    lines_html = ""
+    for ln in conv["lines"]:
+        text_hl = highlight_any_form(normalize_text(ln["text"]), main_forms)
+        lines_html += f'<p><strong>{ln["speaker"]}:</strong> {text_hl}</p>'
 
-    # ── Say this instead ──────────────────────────────────────────
-    also_html = ""
-    also_items = content.get("also_say", [])
-    if also_items:
-        also_inner = ""
-        for a in also_items:
-            reg = a.get("register", "neutral")
-            r = REG_META.get(reg, REG_META["neutral"])
-            alt_forms = _get_phrase_forms(a.get("phrase", ""))  # phrase + stripped variant
-            phrase_hl = highlight_any_form(normalize_text(a["phrase"]), alt_forms)
-            ex_hl     = highlight_any_form(normalize_text(a.get("example", "")), alt_forms)
-            also_inner += (
-                f'<span class="rl {r["cls"]}">{r["lbl"]}</span>'
-                f'<div class="also-box">'
-                f'<div class="also-phrase">{phrase_hl}</div>'
-                f'<div class="also-ex">{ex_hl}</div>'
-                f'<div class="also-note">&#8594; {a["note"]}</div>'
-                f'</div>'
-            )
-        also_html = f'{D}<div class="sec-label">&#128172; Say this instead</div>{also_inner}'
-
-    # ── Real conversations (N→P→C, skip avoid+no-alt) ─────────────
-    convs_html = ""
-    for idx, (conv, (conv_filename, _)) in enumerate(zip(content["conversations"], conv_files)):
-        reg = conv.get("register", "neutral")
-        r = REG_META.get(reg, REG_META["neutral"])
-        st = who_status.get(reg, "best")
-        # Determine which forms to highlight
-        if reg in alt_registers:
-            forms = also_say_map.get(reg, main_forms)
-        else:
-            forms = main_forms
-        # Build lines
-        lines_html = ""
-        for ln in conv["lines"]:
-            sc = "sa" if ln["speaker"] == "A" else "sb2"
-            text_hl = highlight_any_form(normalize_text(ln["text"]), forms)
-            lines_html += f'<p><span class="{sc}">{ln["speaker"]}:</span> {text_hl}</p>'
-        # Suffix for ok/avoid conversations
-        suffix = ""
-        if reg in also_by_reg:
-            alt_p = also_by_reg[reg].get("phrase", "")
-            if alt_p:
-                suffix = f'<span class="csub">&#8594; &ldquo;{alt_p}&rdquo;</span>'
-        caid = f"conv_{idx}"
-        convs_html += (
-            f'<div class="clbl"><span class="rl {r["cls"]}" style="margin:0">{r["lbl"]}</span>{suffix}</div>'
-            f'<div class="cb {r["cb"]}">'
-            f'<div class="ch">'
-            f'<div class="cs">&#128205; {conv["setting"]}</div>'
-            f'<div class="cplay" onclick="document.getElementById(\'{caid}\').play()">&#9654; Play</div>'
-            f'<audio id="{caid}" src="{conv_filename}"></audio>'
-            f'</div>'
-            f'<div class="cl">{lines_html}</div>'
-            f'</div>'
-        )
+    convs_html = (
+        f'<div class="cb {best_r["cb"]}">'
+        f'<div class="ch">'
+        f'<div class="cs">&#128205; {conv["setting"]}</div>'
+        f'<div class="cplay" onclick="document.getElementById(\'conv_0\').play()">&#9654; Play</div>'
+        f'<audio id="conv_0" src="{conv_filename}"></audio>'
+        f'</div>'
+        f'<div class="cl">{lines_html}</div>'
+        f'</div>'
+    )
 
     # ── Voice buttons ─────────────────────────────────────────────
     buttons_back = build_voice_buttons_back(audio_list)
@@ -640,71 +557,12 @@ def build_back(audio_list, conv_files, content):
 </div>
 {D}<div class="sec-label">&#128214; What it means</div>
 <div class="box meaning">{content['simple_meaning']}</div>
-{D}<div class="sec-label">&#127919; When to use it</div>
-{who_html}
-{also_html}
 {D}<div class="sec-label">&#127908; Real conversations</div>
 {convs_html}
 {D}<div class="sec-label">&#9835; Listen in all voices</div>
 <div class="vgrid">{buttons_back}</div>
 </div>"""
 
-
-CARD_CSS = """
-* { box-sizing: border-box; margin: 0; padding: 0; }
-.card {
-  font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif;
-  font-size: 15px; line-height: 1.6; color: #1a1a2e;
-  background: #f4f6f9; min-height: 100vh;
-}
-.ep-front { max-width: 560px; margin: 0 auto; padding: 24px 16px; text-align: center; }
-.ep-back  { max-width: 560px; margin: 0 auto; padding: 16px 16px 28px; }
-.hl { color: #c0392b; font-weight: 700; }
-.sec-label { font-size: 10px; font-weight: 700; color: #8a9ab5; letter-spacing: 1px; text-transform: uppercase; margin: 0 0 8px; }
-.divider { border: none; border-top: 1px solid #e2e8f0; margin: 14px 0 14px; }
-.vgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
-.vbtn { display: flex; align-items: center; gap: 7px; padding: 7px 9px; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; cursor: pointer; }
-audio { display: none; }
-.vp { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 10px; }
-.vn { font-size: 12px; font-weight: 700; color: #2d3748; }
-.vd { font-size: 10px; color: #a0aec0; }
-.rl { display: inline-flex; align-items: center; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px; margin-bottom: 6px; }
-.rn { background: #e8f4fd; color: #1d6fa4; }
-.rp { background: #fef9e7; color: #7d4e00; }
-.rc { background: #e8f5e9; color: #2e7d32; }
-.sentence-wrap { display: flex; align-items: center; gap: 8px; margin: 0 0 0; }
-.sentence { font-size: 14px; line-height: 1.7; color: #2d3748; padding: 10px 14px; background: #fff; border-radius: 8px; border: 1px solid #e2e8f0; flex: 1; }
-.splay { width: 32px; height: 32px; border-radius: 50%; background: #ebf4ff; color: #2b6cb0; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; font-size: 12px; border: 1px solid #bee3f8; }
-.box { border-radius: 0 8px 8px 0; padding: 9px 12px; font-size: 13px; line-height: 1.6; }
-.meaning { background: #ebf4ff; border-left: 2px solid #4299e1; }
-.who-tbl { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
-.wr { display: grid; grid-template-columns: 66px auto 1fr; align-items: start; gap: 8px; padding: 8px 10px; border-bottom: 1px solid #f0f4f8; }
-.wr:last-child { border-bottom: none; }
-.wd { color: #718096; font-size: 11px; }
-.st { font-size: 10px; font-weight: 700; color: #1a1a2e; white-space: nowrap; }
-.savoid { font-size: 10px; font-weight: 700; color: #A32D2D; white-space: nowrap; }
-.wna { flex: 1; }
-.walt { font-size: 11px; font-weight: 500; color: #2b6cb0; margin-top: 3px; }
-.walt-none { font-size: 11px; color: #a0aec0; margin-top: 3px; }
-.walt-none { font-size: 11px; color: #a0aec0; text-align: right; }
-.also-box { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
-.also-phrase { font-size: 15px; font-weight: 700; color: #2d3748; margin-bottom: 8px; }
-.also-ex { font-size: 12px; color: #718096; font-style: italic; padding: 6px 10px; background: #f4f6f9; border-radius: 6px; margin-bottom: 7px; line-height: 1.6; }
-.also-note { font-size: 11px; color: #a0aec0; line-height: 1.5; }
-.cb { border-radius: 0 8px 8px 0; margin-bottom: 10px; }
-.cn { background: #f0f7ff; border-left: 2px solid #4299e1; }
-.cp { background: #fefce8; border-left: 2px solid #d97706; }
-.cc { background: #f0fff4; border-left: 2px solid #48bb78; }
-.ch { display: flex; align-items: center; justify-content: space-between; padding: 7px 12px 5px; border-bottom: 1px solid rgba(0,0,0,0.06); }
-.cs { font-size: 11px; color: #718096; font-style: italic; flex: 1; }
-.cplay { font-size: 11px; color: #2b6cb0; font-weight: 700; cursor: pointer; padding-left: 8px; }
-.cl { padding: 7px 12px 9px; }
-.cl p { font-size: 13px; margin-bottom: 4px; line-height: 1.5; }
-.sa { color: #2b6cb0; font-weight: 700; }
-.sb2 { color: #c05621; font-weight: 700; }
-.clbl { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
-.csub { font-size: 10px; color: #8a9ab5; }
-"""
 
 def build_anki_model():
     return genanki.Model(
@@ -759,14 +617,16 @@ def main():
                 all_media.extend([a["filepath"] for a in audio_list])
 
                 print("  🎭  会話音声を生成中...")
-                conv_files = []
-                for idx, conv in enumerate(content["conversations"], 1):
-                    filename, filepath = generate_conversation_audio(conv, uid, f"c{idx}", tmpdir)
-                    conv_files.append((filename, filepath))
-                    all_media.append(filepath)
+                best_reg = get_best_reg(content)
+                best_conv = next(
+                    (c for c in content["conversations"] if c.get("register") == best_reg),
+                    content["conversations"][0] if content["conversations"] else {}
+                )
+                conv_filename, conv_filepath = generate_conversation_audio(best_conv, uid, "c1", tmpdir)
+                all_media.append(conv_filepath)
 
                 front = build_front(audio_list, content)
-                back  = build_back(audio_list, conv_files, content)
+                back  = build_back(audio_list, (conv_filename, best_conv), content, best_reg)
 
                 note = genanki.Note(
                     model=anki_model,
