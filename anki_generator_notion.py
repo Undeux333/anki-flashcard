@@ -218,22 +218,33 @@ Return ONLY valid JSON (no markdown, no backticks):
   "level": "beginner or intermediate or advanced"
 }}"""
 
-    response = client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            temperature=0.4
-        )
-    )
-    text = response.text.strip()
-    if text.startswith("```"):
-        text = text.split("```")[1]
-        if text.startswith("json"):
-            text = text[4:]
-    content = json.loads(text.strip())
-    content = _clean_gemini_text(content)
-    return _validate_best_conversations(_enforce_also_say(content))
+    import time
+    last_err = None
+    for attempt in range(3):
+        try:
+            if attempt > 0:
+                wait = attempt * 15
+                print(f"    ⏳ 503混雑 — {wait}秒待機後にリトライ ({attempt}/2)...")
+                time.sleep(wait)
+            response = client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    temperature=0.4
+                )
+            )
+            text = response.text.strip()
+            if text.startswith("```"):
+                text = text.split("```")[1]
+                if text.startswith("json"):
+                    text = text[4:]
+            content = json.loads(text.strip())
+            content = _clean_gemini_text(content)
+            return _validate_best_conversations(_enforce_also_say(content))
+        except Exception as e:
+            last_err = e
+    raise last_err
 
 def _validate_best_conversations(content: dict) -> dict:
     """
