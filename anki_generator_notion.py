@@ -144,63 +144,16 @@ WHO_TO_USE EVALUATION — do this BEFORE writing anything else:
 
 - audio_text: 1 natural sentence using the ORIGINAL phrase, style matching the FIRST "best" register.
 
-CONVERSATION GENERATION:
-- FIRST: craft a setting that makes the phrase INEVITABLE and NATURAL.
-  The setting must reflect the phrase's exact core meaning — not a generic situation.
-  BAD:  "Looking for a specific tool in a shared workshop." then B says the phrase before finding it.
-  GOOD: "B finally spots the exact tool they needed after searching." then B says the phrase upon finding it.
-- "best" register → B's line uses the ORIGINAL phrase verbatim. No word substitutions allowed.
-  If you substitute any word (e.g. "what" → "the one"), the register must be "ok", not "best".
-- "ok" register → B's line uses the ALTERNATIVE PHRASE from also_say. Original must NOT appear.
-- "avoid" + alternative exists → B's line uses the ALTERNATIVE PHRASE. Original must NOT appear.
-- "avoid" + no natural alternative → OMIT this register's conversation entirely.
-
-highlight_forms: list EVERY exact form that appears in audio_text AND all conversation lines. Use straight apostrophes only.
+highlight_forms: list EVERY exact form that appears in audio_text. Use straight apostrophes only.
 
 Return ONLY valid JSON (no markdown, no backticks):
 {{
   "phrase_display": "the phrase with correct capitalization",
   "audio_text": "1 natural sentence with the ORIGINAL phrase — style matches the first best register",
-  "highlight_forms": ["every exact form in audio_text and ALL conversations — straight apostrophes"],
+  "highlight_forms": ["exact forms of audio_text phrase — straight apostrophes"],
   "simple_meaning": "A1-A2 vocabulary. Max 2 sentences. Explain to a native English-speaking child.",
-  "conversations": [
-    {{
-      "register": "neutral",
-      "setting": "brief situation description",
-      "speaker_a": {{"gender": "female or male"}},
-      "speaker_b": {{"gender": "female or male"}},
-      "lines": [
-        {{"speaker": "A", "text": "natural line"}},
-        {{"speaker": "B", "text": "original if best; alternative if ok/avoid; OMIT conversation if avoid+no-alt"}},
-        {{"speaker": "A", "text": "natural line"}},
-        {{"speaker": "B", "text": "natural line"}}
-      ]
-    }},
-    {{
-      "register": "polite",
-      "setting": "situation requiring more care",
-      "speaker_a": {{"gender": "female or male"}},
-      "speaker_b": {{"gender": "female or male"}},
-      "lines": [
-        {{"speaker": "A", "text": "natural line"}},
-        {{"speaker": "B", "text": "original if best; alternative if ok/avoid; OMIT conversation if avoid+no-alt"}},
-        {{"speaker": "A", "text": "natural line"}},
-        {{"speaker": "B", "text": "natural line"}}
-      ]
-    }},
-    {{
-      "register": "casual",
-      "setting": "relaxed situation with close friends or family",
-      "speaker_a": {{"gender": "female or male"}},
-      "speaker_b": {{"gender": "female or male"}},
-      "lines": [
-        {{"speaker": "A", "text": "casual line"}},
-        {{"speaker": "B", "text": "original if best; alternative if ok/avoid; OMIT conversation if avoid+no-alt"}},
-        {{"speaker": "A", "text": "casual line"}},
-        {{"speaker": "B", "text": "casual line"}}
-      ]
-    }}
-  ],
+  "highlight_forms": ["exact forms of audio_text phrase — straight apostrophes"],
+  "simple_meaning": "A1-A2 vocabulary. Max 2 sentences. Explain to a native English-speaking child.",
   "who_to_use": [
     {{"register": "neutral", "status": "best or ok or avoid", "note": "short note if ok or avoid, else empty string"}},
     {{"register": "polite",  "status": "best or ok or avoid", "note": "short note if ok or avoid, else empty string"}},
@@ -241,32 +194,10 @@ Return ONLY valid JSON (no markdown, no backticks):
                     text = text[4:]
             content = json.loads(text.strip())
             content = _clean_gemini_text(content)
-            return _validate_best_conversations(_enforce_also_say(content))
+            return _enforce_also_say(content)
         except Exception as e:
             last_err = e
     raise last_err
-
-def _validate_best_conversations(content: dict) -> dict:
-    """
-    Detects cases where Gemini generated a variant phrase (not the original)
-    in a 'best' register conversation — violating the verbatim rule.
-    Logs a warning. Does NOT auto-fix (to preserve audio sync).
-    """
-    who_status = {w["register"]: w.get("status", "best") for w in content.get("who_to_use", [])}
-    phrase_display = content.get("phrase_display", "")
-    forms = _get_phrase_forms(phrase_display)
-    norm_forms = [normalize_text(f).lower() for f in forms]
-
-    for conv in content.get("conversations", []):
-        reg = conv.get("register", "")
-        if who_status.get(reg) != "best":
-            continue
-        all_text = normalize_text(" ".join(ln["text"] for ln in conv.get("lines", []))).lower()
-        if not any(nf in all_text for nf in norm_forms):
-            print(f"    ⚠️  [{reg}] 'best'なのに原文フレーズが会話に見つかりません: {phrase_display!r}")
-            print(f"         → Geminiがvariantを生成した可能性があります。手動確認を推奨します。")
-    return content
-
 
 def _clean_gemini_text(content: dict) -> dict:
     """
@@ -284,10 +215,6 @@ def _clean_gemini_text(content: dict) -> dict:
 
     content["audio_text"]    = _clean(content.get("audio_text", ""))
     content["simple_meaning"] = _clean(content.get("simple_meaning", ""))
-    for conv in content.get("conversations", []):
-        conv["setting"] = _clean(conv.get("setting", ""))
-        for ln in conv.get("lines", []):
-            ln["text"] = _clean(ln.get("text", ""))
     for a in content.get("also_say", []):
         a["phrase"]   = _clean(a.get("phrase", ""))
         a["example"]  = _clean(a.get("example", ""))
@@ -343,28 +270,6 @@ def generate_all_audio(text: str, uid: str, tmpdir: str) -> list[dict]:
         except Exception as e:
             print(f"    ⚠️  {v['name']} 失敗: {e}")
     return results
-
-def generate_conversation_audio(conv: dict, uid: str, tag: str, tmpdir: str) -> tuple[str, str]:
-    gender_a = conv["speaker_a"]["gender"]
-    gender_b = conv["speaker_b"]["gender"]
-    voice_a = CONV_VOICES.get(gender_a, CONV_VOICES["male"])
-    if gender_a == gender_b:
-        voice_b = CONV_VOICES_ALT.get(gender_b, CONV_VOICES_ALT["male"])
-    else:
-        voice_b = CONV_VOICES.get(gender_b, CONV_VOICES["female"])
-
-    silence = AudioSegment.silent(duration=50)
-    combined = AudioSegment.silent(duration=100)
-    for ln in conv["lines"]:
-        voice = voice_a if ln["speaker"] == "A" else voice_b
-        audio_bytes = asyncio.run(_tts_bytes(ln["text"], voice, TTS_RATE))
-        segment = AudioSegment.from_mp3(io.BytesIO(audio_bytes))
-        combined += segment + silence
-
-    filename = f"ep_{uid}_{tag}.mp3"
-    filepath = str(Path(tmpdir) / filename)
-    combined.export(filepath, format="mp3")
-    return filename, filepath
 
 # ═══════════════════════════════════════════════
 #   Highlight helpers
@@ -506,11 +411,11 @@ def get_best_reg(content: dict) -> str:
     return next((r for r in ["neutral", "polite", "casual"] if who_status.get(r) == "best"), "neutral")
 
 
-def build_back(audio_list, conv_file, content, best_reg: str):
+
+def build_back(audio_list, content, best_reg: str):
     main_forms = _get_phrase_forms(content["phrase_display"])
     best_r = REG_META.get(best_reg, REG_META["neutral"])
 
-    # Sentence + Brian button
     audio_text_hl = highlight_any_form(content["audio_text"], main_forms)
     brian_f = audio_list[0]["filename"] if audio_list else ""
     brian_btn = (
@@ -519,26 +424,6 @@ def build_back(audio_list, conv_file, content, best_reg: str):
     ) if brian_f else ""
 
     D = '<div class="divider"></div>'
-
-    # ── Real conversation (best_reg only) ─────────────────────────
-    conv_filename, conv = conv_file  # (filename, conv_dict)
-    lines_html = ""
-    for ln in conv["lines"]:
-        text_hl = highlight_any_form(normalize_text(ln["text"]), main_forms)
-        lines_html += f'<p><strong>{ln["speaker"]}:</strong> {text_hl}</p>'
-
-    convs_html = (
-        f'<div class="cb {best_r["cb"]}">'
-        f'<div class="ch">'
-        f'<div class="cs">&#128205; {conv["setting"]}</div>'
-        f'<div class="cplay" onclick="document.getElementById(\'conv_0\').play()">&#9654; Play</div>'
-        f'<audio id="conv_0" src="{conv_filename}"></audio>'
-        f'</div>'
-        f'<div class="cl">{lines_html}</div>'
-        f'</div>'
-    )
-
-    # ── Voice buttons ─────────────────────────────────────────────
     buttons_back = build_voice_buttons_back(audio_list)
 
     return f"""<div class="ep-back">
@@ -548,51 +433,9 @@ def build_back(audio_list, conv_file, content, best_reg: str):
 </div>
 {D}<div class="sec-label">&#128214; What it means</div>
 <div class="box meaning">{content['simple_meaning']}</div>
-{D}<div class="sec-label">&#127908; Real conversations</div>
-{convs_html}
 {D}<div class="sec-label">&#9835; Listen in all voices</div>
 <div class="vgrid">{buttons_back}</div>
 </div>"""
-
-
-CARD_CSS = """
-* { box-sizing: border-box; margin: 0; padding: 0; }
-.card {
-  font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif;
-  font-size: 15px; line-height: 1.6; color: #1a1a2e;
-  background: #f4f6f9; min-height: 100vh;
-}
-.ep-front { max-width: 560px; margin: 0 auto; padding: 24px 16px; text-align: center; }
-.ep-back  { max-width: 560px; margin: 0 auto; padding: 16px 16px 28px; }
-.hl { color: #c0392b; font-weight: 700; }
-.sec-label { font-size: 10px; font-weight: 700; color: #8a9ab5; letter-spacing: 1px; text-transform: uppercase; margin: 0 0 8px; }
-.divider { border: none; border-top: 1px solid #e2e8f0; margin: 14px 0 14px; }
-.vgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
-.vbtn { display: flex; align-items: center; gap: 7px; padding: 7px 9px; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; cursor: pointer; }
-audio { display: none; }
-.vp { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 10px; }
-.vn { font-size: 12px; font-weight: 700; color: #2d3748; }
-.vd { font-size: 10px; color: #a0aec0; }
-.rl { display: inline-flex; align-items: center; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px; margin-bottom: 6px; }
-.rn { background: #e8f4fd; color: #1d6fa4; }
-.rp { background: #fef9e7; color: #7d4e00; }
-.rc { background: #e8f5e9; color: #2e7d32; }
-.sentence-wrap { display: flex; align-items: center; gap: 8px; margin: 0 0 0; }
-.sentence { font-size: 14px; line-height: 1.7; color: #2d3748; padding: 10px 14px; background: #fff; border-radius: 8px; border: 1px solid #e2e8f0; flex: 1; }
-.splay { width: 32px; height: 32px; border-radius: 50%; background: #ebf4ff; color: #2b6cb0; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; font-size: 12px; border: 1px solid #bee3f8; }
-.box { border-radius: 0 8px 8px 0; padding: 9px 12px; font-size: 13px; line-height: 1.6; }
-.meaning { background: #ebf4ff; border-left: 2px solid #4299e1; }
-.cb { border-radius: 0 8px 8px 0; margin-bottom: 10px; }
-.cn { background: #f0f7ff; border-left: 2px solid #4299e1; }
-.cp { background: #fefce8; border-left: 2px solid #d97706; }
-.cc { background: #f0fff4; border-left: 2px solid #48bb78; }
-.ch { display: flex; align-items: center; justify-content: space-between; padding: 7px 12px 5px; border-bottom: 1px solid rgba(0,0,0,0.06); }
-.cs { font-size: 11px; color: #718096; font-style: italic; flex: 1; }
-.cplay { font-size: 11px; color: #2b6cb0; font-weight: 700; cursor: pointer; padding-left: 8px; }
-.cl { padding: 7px 12px 9px; }
-.cl p { font-size: 13px; margin-bottom: 4px; line-height: 1.5; }
-"""
-
 
 def build_anki_model():
     return genanki.Model(
@@ -646,17 +489,9 @@ def main():
                 audio_list = generate_all_audio(content["audio_text"], uid, tmpdir)
                 all_media.extend([a["filepath"] for a in audio_list])
 
-                print("  🎭  会話音声を生成中...")
                 best_reg = get_best_reg(content)
-                best_conv = next(
-                    (c for c in content["conversations"] if c.get("register") == best_reg),
-                    content["conversations"][0] if content["conversations"] else {}
-                )
-                conv_filename, conv_filepath = generate_conversation_audio(best_conv, uid, "c1", tmpdir)
-                all_media.append(conv_filepath)
-
                 front = build_front(audio_list, content)
-                back  = build_back(audio_list, (conv_filename, best_conv), content, best_reg)
+                back  = build_back(audio_list, content, best_reg)
 
                 note = genanki.Note(
                     model=anki_model,
