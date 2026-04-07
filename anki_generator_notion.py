@@ -127,24 +127,34 @@ CRITICAL RULES:
 - Use contractions, fillers (y'know, I mean, honestly, like), natural rhythm.
 - simple_meaning: explain to a native English-speaking child (CEFR A1-A2 vocabulary only). Short, concrete, vivid. Max 2 sentences.
 - For time-related phrases: always give SPECIFIC ranges (e.g. "about 3 to 6 hours ago"). Never say "a long time."
-- who_to_use: evaluate each register FIRST before writing anything else.
-  "best" = natural and correct as-is.
-  "ok" = works but needs a small adjustment (use alternative in conversation).
-  "avoid" = wrong register for this phrase — do NOT use the original phrase here. Provide an alternative if one exists naturally; if not, leave also_say empty for this register.
-- audio_text: generate 1 natural sentence using the ORIGINAL phrase, written in the style of the FIRST "best" register. If Neutral is best, write a Neutral sentence. If only Casual is best, write a Casual sentence.
 
-CONVERSATION GENERATION — CORE RULE:
-- "best" register → conversation uses the ORIGINAL phrase verbatim (or natural conjugation).
-- "ok" register → conversation uses the ALTERNATIVE PHRASE from also_say. Original must NOT appear.
-- "avoid" + alternative exists → conversation uses the ALTERNATIVE PHRASE. Original must NOT appear.
-- "avoid" + no natural alternative → OMIT this register's conversation entirely (do not generate it).
-- CONSISTENCY RULE (critical): If you write a compressed/shortened form in a conversation, that register MUST be "ok" or "avoid", not "best". Never rate "best" if the conversation doesn't use the original phrase.
+WHO_TO_USE EVALUATION — do this BEFORE writing anything else:
+  STEP 1 — identify the phrase's CORE CONTEXT: What exact moment/situation triggers this phrase?
+            Is it a reaction? A discovery? A request? An explanation? Write this out mentally first.
+  STEP 2 — rate each register honestly:
+    "best"  = sounds completely natural, zero awkwardness, no adjustment needed whatsoever.
+    "ok"    = works but slightly off in tone — a small word change makes it noticeably better.
+    "avoid" = sounds unnatural, inappropriate, or jarring in this register.
+  STEP 3 — reality check: Rating ALL THREE as "best" is almost never correct.
+            Most phrases have at least one "ok" or "avoid" register.
+            If you rated all three "best", re-examine — you likely missed a nuance.
+            Example of correct evaluation for "That's what I was looking for.":
+              Neutral → best (natural everyday reaction)
+              Polite  → ok (slightly casual for a client/boss setting; better: "That's exactly what I had in mind.")
+              Casual  → best (natural with friends)
 
-VERBATIM EXAMPLE — CRITICAL:
-  Target: "That's what I was looking for."  |  casual = "best"
-  WRONG: B: Yes! That's the one I was looking for.  <- "the one" is NOT the original
-  RIGHT: B: Yes! That's what I was looking for.     <- exact original phrase required
-  ANY word substitution (what->the one, etc.) means the register must be "ok" not "best".
+- audio_text: 1 natural sentence using the ORIGINAL phrase, style matching the FIRST "best" register.
+
+CONVERSATION GENERATION:
+- FIRST: craft a setting that makes the phrase INEVITABLE and NATURAL.
+  The setting must reflect the phrase's exact core meaning — not a generic situation.
+  BAD:  "Looking for a specific tool in a shared workshop." then B says the phrase before finding it.
+  GOOD: "B finally spots the exact tool they needed after searching." then B says the phrase upon finding it.
+- "best" register → B's line uses the ORIGINAL phrase verbatim. No word substitutions allowed.
+  If you substitute any word (e.g. "what" → "the one"), the register must be "ok", not "best".
+- "ok" register → B's line uses the ALTERNATIVE PHRASE from also_say. Original must NOT appear.
+- "avoid" + alternative exists → B's line uses the ALTERNATIVE PHRASE. Original must NOT appear.
+- "avoid" + no natural alternative → OMIT this register's conversation entirely.
 
 highlight_forms: list EVERY exact form that appears in audio_text AND all conversation lines. Use straight apostrophes only.
 
@@ -649,7 +659,7 @@ CARD_CSS = """
 }
 .ep-front { max-width: 560px; margin: 0 auto; padding: 24px 16px; text-align: center; }
 .ep-back  { max-width: 560px; margin: 0 auto; padding: 16px 16px 28px; }
-.hl { color: #2b6cb0; text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 2px; font-weight: 500; }
+.hl { color: #c0392b; font-weight: 700; }
 .sec-label { font-size: 10px; font-weight: 700; color: #8a9ab5; letter-spacing: 1px; text-transform: uppercase; margin: 0 0 8px; }
 .divider { border: none; border-top: 1px solid #e2e8f0; margin: 14px 0 14px; }
 .vgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
