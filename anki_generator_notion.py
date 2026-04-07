@@ -318,12 +318,9 @@ def generate_conversation_audio(conv: dict, uid: str, tag: str, tmpdir: str) -> 
     combined = AudioSegment.silent(duration=100)
     for ln in conv["lines"]:
         voice = voice_a if ln["speaker"] == "A" else voice_b
-        try:
-            audio_bytes = asyncio.run(_tts_bytes(ln["text"], voice, TTS_RATE))
-            segment = AudioSegment.from_mp3(io.BytesIO(audio_bytes))
-            combined += segment + silence
-        except Exception as e:
-            print(f"    ⚠️  会話行生成失敗: {e}")
+        audio_bytes = asyncio.run(_tts_bytes(ln["text"], voice, TTS_RATE))
+        segment = AudioSegment.from_mp3(io.BytesIO(audio_bytes))
+        combined += segment + silence
 
     filename = f"ep_{uid}_{tag}.mp3"
     filepath = str(Path(tmpdir) / filename)
@@ -453,15 +450,18 @@ def build_front(audio_list, content):
 </div>"""
 
 def build_back(audio_list, conv_files, content):
-    main_forms = content.get("highlight_forms") or [content["phrase_display"]]
+    # Build highlight forms purely from phrase_display and also_say phrases.
+    # We deliberately ignore Gemini's highlight_forms because it frequently
+    # includes unrelated words (e.g. "I", "the", "Yeah") causing false highlights.
+    main_forms = [content["phrase_display"]]
 
-    # Per-register highlight map (ok/avoid → alt forms)
+    # Per-register highlight map: only the alternative phrase itself
     also_say_map = {}
     for a in content.get("also_say", []):
         reg = a.get("register", "")
-        forms = a.get("highlight_forms") or [a.get("phrase", "")]
-        if reg:
-            also_say_map[reg] = forms
+        alt_phrase = a.get("phrase", "")
+        if reg and alt_phrase:
+            also_say_map[reg] = [alt_phrase]
 
     who_status = {w["register"]: w.get("status", "best") for w in content.get("who_to_use", [])}
     alt_registers = {r for r, s in who_status.items() if s in ("ok", "avoid")}
@@ -492,21 +492,24 @@ def build_back(audio_list, conv_files, content):
         is_best  = st == "best"
         st_lbl  = "⭐ Best" if is_best else ("🟢 OK" if st == "ok" else "🚫 Avoid")
         st_cls  = "savoid" if is_avoid else "st"
-        note_html = f'<div class="wd">{w["note"]}</div>' if w.get("note") else "<div></div>"
-        # Alt phrase column
+        # note and alt stacked in one cell to avoid overflow on narrow screens
         if is_best:
-            alt_html = "<div></div>"
-        elif reg in also_by_reg:
-            alt_phrase = also_by_reg[reg].get("phrase", "")
-            alt_html = f'<div class="walt">&#8594; &ldquo;{alt_phrase}&rdquo;</div>'
+            note_alt_html = ""
         else:
-            alt_html = '<div class="walt-none">—</div>'
+            note_text = f'<div class="wd">{w["note"]}</div>' if w.get("note") else ""
+            if reg in also_by_reg:
+                alt_phrase = also_by_reg[reg].get("phrase", "")
+                alt_text = f'<div class="walt">&#8594; &ldquo;{alt_phrase}&rdquo;</div>'
+            elif is_avoid or st == "ok":
+                alt_text = '<div class="walt-none">—</div>'
+            else:
+                alt_text = ""
+            note_alt_html = f'<div class="wna">{note_text}{alt_text}</div>'
         who_html += (
             f'<div class="wr">'
             f'<div><span class="rl {r["cls"]}" style="margin:0">{r["lbl"]}</span></div>'
             f'<span class="{st_cls}">{st_lbl}</span>'
-            f'{note_html}'
-            f'{alt_html}'
+            f'{note_alt_html}'
             f'</div>'
         )
     who_html += '</div>'
@@ -519,7 +522,7 @@ def build_back(audio_list, conv_files, content):
         for a in also_items:
             reg = a.get("register", "neutral")
             r = REG_META.get(reg, REG_META["neutral"])
-            alt_forms = a.get("highlight_forms") or [a.get("phrase", "")]
+            alt_forms = [a.get("phrase", "")]  # only the phrase itself, not Gemini's list
             phrase_hl = highlight_any_form(normalize_text(a["phrase"]), alt_forms)
             ex_hl     = highlight_any_form(normalize_text(a.get("example", "")), alt_forms)
             also_inner += (
@@ -616,12 +619,14 @@ audio { display: none; }
 .box { border-radius: 0 8px 8px 0; padding: 9px 12px; font-size: 13px; line-height: 1.6; }
 .meaning { background: #ebf4ff; border-left: 2px solid #4299e1; }
 .who-tbl { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
-.wr { display: grid; grid-template-columns: 66px auto 1fr auto; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid #f0f4f8; }
+.wr { display: grid; grid-template-columns: 66px auto 1fr; align-items: start; gap: 8px; padding: 8px 10px; border-bottom: 1px solid #f0f4f8; }
 .wr:last-child { border-bottom: none; }
 .wd { color: #718096; font-size: 11px; }
 .st { font-size: 10px; font-weight: 700; color: #1a1a2e; white-space: nowrap; }
 .savoid { font-size: 10px; font-weight: 700; color: #A32D2D; white-space: nowrap; }
-.walt { font-size: 11px; font-weight: 500; color: #2b6cb0; text-align: right; white-space: nowrap; }
+.wna { flex: 1; }
+.walt { font-size: 11px; font-weight: 500; color: #2b6cb0; margin-top: 3px; }
+.walt-none { font-size: 11px; color: #a0aec0; margin-top: 3px; }
 .walt-none { font-size: 11px; color: #a0aec0; text-align: right; }
 .also-box { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
 .also-phrase { font-size: 15px; font-weight: 700; color: #2d3748; margin-bottom: 8px; }
