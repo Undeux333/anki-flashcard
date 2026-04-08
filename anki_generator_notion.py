@@ -22,6 +22,7 @@ PROP_PHRASE    = "Phrase"
 PROP_STATUS    = "Status"
 
 # ステータス値
+STATUS_READY   = "Ready"
 STATUS_DONE    = "Done"
 STATUS_ERROR   = "Error"
 STATUS_TIMEOUT = "Timeout"
@@ -73,7 +74,6 @@ def generate_content(client, speech_lines: list) -> dict:
     label_count = len(speech_lines)
     input_text = "\n".join([f"{l['speaker']}: {l['text']}" for l in speech_lines])
     
-    # ユーザー指定のプロンプトをそのまま使用
     prompt = f"""Explain the nuance of EACH phrase marked with A: or B: in the following dialogue. 
 Explain how this phrase is used in everyday conversation by native speakers by briefly describing the situation or feeling it is used for. Focus on the speaker’s feeling and intention. Keep it short, simple, and natural in one sentence. Use plain, everyday English. Avoid abstract or textbook-like language, and avoid extra details or unnecessary assumptions. Write as if explaining to an English learner in a casual conversation.
 CRITICAL RULE: 
@@ -169,8 +169,8 @@ def main():
     client = genai.Client(api_key=GEMINI_API_KEY)
     
     url = f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}/query"
-    # フィルタ：Statusが空、またはTimeoutのみを対象とする
-    filter_payload = {"filter": {"or": [{"property": PROP_STATUS, "select": {"is_empty": True}}, {"property": PROP_STATUS, "select": {"equals": STATUS_TIMEOUT}}]}}
+    # 修正箇所：StatusがReady、またはTimeoutのみを対象とするように変更
+    filter_payload = {"filter": {"or": [{"property": PROP_STATUS, "select": {"equals": STATUS_READY}}, {"property": PROP_STATUS, "select": {"equals": STATUS_TIMEOUT}}]}}
     if FORCE_REGEN: filter_payload = {}
 
     res = requests.post(url, headers={"Authorization": f"Bearer {NOTION_TOKEN}", "Notion-Version": NOTION_VERSION, "Content-Type": "application/json"}, json=filter_payload, timeout=15)
@@ -205,20 +205,9 @@ def main():
                 deck.add_note(genanki.Note(model=model, fields=[build_front(f_fn), build_back(speech_lines, s_files, m_files, meanings)], guid=uid))
                 
                 requests.patch(f"https://api.notion.com/v1/pages/{page_id}", headers={"Authorization": f"Bearer {NOTION_TOKEN}", "Notion-Version": NOTION_VERSION, "Content-Type": "application/json"}, json={"properties": {PROP_STATUS: {"select": {"name": STATUS_DONE}}}}, timeout=10)
-                print("   ✅ 成功")
+                print("    ✅ 成功")
             except Exception as e:
                 err_s = str(e).lower()
-                # 混雑・タイムアウト判定
                 status_to_set = STATUS_TIMEOUT if ("429" in err_s or "timeout" in err_s or "deadline" in err_s) else STATUS_ERROR
-                print(f"   ❌ 失敗({status_to_set}): {e}")
+                print(f"    ❌ 失敗({status_to_set}): {e}")
                 requests.patch(f"https://api.notion.com/v1/pages/{page_id}", headers={"Authorization": f"Bearer {NOTION_TOKEN}", "Notion-Version": NOTION_VERSION, "Content-Type": "application/json"}, json={"properties": {PROP_STATUS: {"select": {"name": status_to_set}}}}, timeout=10)
-
-        if all_media:
-            pkg = genanki.Package(deck)
-            pkg.media_files = all_media
-            final_name = output_path / f"deck_{datetime.now().strftime('%m%d%H%M')}.apkg"
-            pkg.write_to_file(str(final_name))
-            print(f"📦 生成完了: {final_name}")
-
-if __name__ == "__main__":
-    main()
