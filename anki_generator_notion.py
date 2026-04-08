@@ -86,7 +86,7 @@ def generate_content(client, speech_lines: list) -> dict:
     
     # プロンプトで個数を厳格に指定
     prompt = f"""Explain the nuance of EACH phrase marked with A: or B: in the following dialogue. 
-Focus on the speaker’s intention and feeling. Simple and natural. 
+Explain how this phrase is used in everyday conversation by native speakers. Focus on the speaker’s feeling. Keep it short, simple, and natural. Use plain English. 
 
 CRITICAL RULE: 
 The input has exactly {label_count} labeled phrases. 
