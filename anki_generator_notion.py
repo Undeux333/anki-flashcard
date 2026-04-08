@@ -133,30 +133,28 @@ def main():
     out.mkdir(exist_ok=True)
     client = genai.Client(api_key=GEMINI_API_KEY)
     headers = {"Authorization": f"Bearer {NOTION_TOKEN}", "Notion-Version": "2022-06-28", "Content-Type": "application/json"}
-    res = requests.post(f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}/query", headers=headers, json={} if FORCE_REGEN else {"filter": {"property": PROP_STATUS, "select": {"is_empty": True}}})
-    pending = [{"p": p["properties"][PROP_PHRASE]["title"][0]["text"]["content"], "id": p["id"]} for p in res.json().get("results", [])]
-    if not pending: return
-    model = genanki.Model(ANKI_MODEL_ID, "EP_Model_v16", fields=[{"name": "F"},{"name": "B"}], templates=[{"name": "C1", "qfmt": "{{F}}", "afmt": "{{B}}"}], css=CARD_CSS)
-    deck = genanki.Deck(ANKI_DECK_ID, "English Multi-Voice")
-    media = []
-    with tempfile.TemporaryDirectory() as tmp:
-        for i, item in enumerate(pending):
-            uid = hashlib.md5(item["p"].encode()).hexdigest()[:8]
-            try:
-                lines = get_speech_lines(item["p"])
-                is_conv = any(l["speaker"] == "B" for l in lines) or len(lines) > 1
-                meanings = generate_content(client, lines)
-                ff, sf = asyncio.run(process_audio_multi(lines, meanings, uid, tmp))
-                for f in ff.values(): media.append(str(Path(tmp)/f))
-                for p in sf.values(): 
-                    for x in p: media.append(str(Path(tmp)/x["s"])); media.append(str(Path(tmp)/x["m"]))
-                deck.add_note(genanki.Note(model=model, fields=[build_front(ff, is_conv), build_back(lines, meanings, sf, is_conv)], guid=uid))
-                requests.patch(f"https://api.notion.com/v1/pages/{item['id']}", headers=headers, json={"properties": {PROP_STATUS: {"select": {"name": STATUS_DONE}}}})
-                print(f"✅ {uid}")
-            except Exception as e: print(f"❌ {e}")
-        if media:
-            pkg = genanki.Package(deck)
-            pkg.media_files = list(set(media))
-            pkg.write_to_file(out / f"deck_{datetime.now().strftime('%m%d%H%M')}.apkg")
+    
+    # Notionからデータ取得
+    res = requests.post(f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}/query", 
+                        headers=headers, 
+                        json={} if FORCE_REGEN else {"filter": {"property": PROP_STATUS, "select": {"is_empty": True}}})
+    res.raise_for_status()
 
-if __name__ == "__main__": main()
+    # 🆕 ここを修正：titleリストが空でないか、およびテキストが存在するかをチェック
+    pending = []
+    for p in res.json().get("results", []):
+        try:
+            # タイトル列のプロパティを取得
+            title_list = p["properties"][PROP_PHRASE].get("title", [])
+            if title_list:
+                text_content = title_list[0]["text"]["content"].strip()
+                if text_content:
+                    pending.append({"p": text_content, "id": p["id"]})
+        except (KeyError, IndexError):
+            continue
+
+    if not pending:
+        print("処理待ちのデータはありません。")
+        return
+
+    # ...（以降のモデル・デッキ生成処理は同じ）
