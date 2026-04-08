@@ -169,8 +169,17 @@ def main():
     client = genai.Client(api_key=GEMINI_API_KEY)
     
     url = f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}/query"
-    # 修正箇所：StatusがReady、またはTimeoutのみを対象とするように変更
-    filter_payload = {"filter": {"or": [{"property": PROP_STATUS, "select": {"equals": STATUS_READY}}, {"property": PROP_STATUS, "select": {"equals": STATUS_TIMEOUT}}]}}
+    
+    # 修正箇所：Statusが「Ready」または「Timeout」のみを対象とする（空欄は無視）
+    filter_payload = {
+        "filter": {
+            "or": [
+                {"property": PROP_STATUS, "select": {"equals": STATUS_READY}},
+                {"property": PROP_STATUS, "select": {"equals": STATUS_TIMEOUT}}
+            ]
+        }
+    }
+    
     if FORCE_REGEN: filter_payload = {}
 
     res = requests.post(url, headers={"Authorization": f"Bearer {NOTION_TOKEN}", "Notion-Version": NOTION_VERSION, "Content-Type": "application/json"}, json=filter_payload, timeout=15)
@@ -183,7 +192,9 @@ def main():
             if phrase: pending.append({"phrase": phrase, "page_id": page["id"]})
         except: continue
 
-    if not pending: return
+    if not pending:
+        print("処理対象のデータ（Ready または Timeout）が見つかりませんでした。")
+        return
 
     model = genanki.Model(ANKI_MODEL_ID, "EP_Model_v14", fields=[{"name": "Front"}, {"name": "Back"}], templates=[{"name": "Card 1", "qfmt": "{{Front}}", "afmt": "{{Back}}"}], css=CARD_CSS)
     deck = genanki.Deck(ANKI_DECK_ID, "English Phrases (Auto)")
@@ -211,3 +222,13 @@ def main():
                 status_to_set = STATUS_TIMEOUT if ("429" in err_s or "timeout" in err_s or "deadline" in err_s) else STATUS_ERROR
                 print(f"    ❌ 失敗({status_to_set}): {e}")
                 requests.patch(f"https://api.notion.com/v1/pages/{page_id}", headers={"Authorization": f"Bearer {NOTION_TOKEN}", "Notion-Version": NOTION_VERSION, "Content-Type": "application/json"}, json={"properties": {PROP_STATUS: {"select": {"name": status_to_set}}}}, timeout=10)
+
+        if all_media:
+            pkg = genanki.Package(deck)
+            pkg.media_files = all_media
+            final_name = output_path / f"deck_{datetime.now().strftime('%m%d%H%M')}.apkg"
+            pkg.write_to_file(str(final_name))
+            print(f"📦 生成完了: {final_name}")
+
+if __name__ == "__main__":
+    main()
