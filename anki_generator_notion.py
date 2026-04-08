@@ -86,7 +86,7 @@ def generate_content(client, speech_lines: list) -> dict:
     
     # プロンプトで個数を厳格に指定
     prompt = f"""Explain the nuance of EACH phrase marked with A: or B: in the following dialogue. 
-Explain how this phrase is used in everyday conversation by native speakers. Focus on the speaker’s feeling and intention. Keep it short, simple, and natural in one sentence. Use plain, everyday English. Capture the meaning by rephrasing it as something the speaker would naturally say or feel in that moment, rather than analyzing or explaining it. Avoid abstract or textbook-like language, and keep it conversational, as if speaking to an English learner.
+Explain how this phrase is used in everyday conversation by native speakers by briefly describing the situation or feeling it is used for. Focus on the speaker’s feeling and intention. Keep it short, simple, and natural in one sentence. Use plain, everyday English. Avoid abstract or textbook-like language, and avoid extra details or unnecessary assumptions. Write as if explaining to an English learner in a casual conversation.
 CRITICAL RULE: 
 The input has exactly {label_count} labeled phrases. 
 You MUST provide exactly {label_count} explanations in the "meanings" array. 
