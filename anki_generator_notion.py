@@ -32,6 +32,7 @@ CONV_VOICES = {
     "B": "en-US-AvaMultilingualNeural",
 }
 
+# CSS（カードのデザイン）
 CARD_CSS = """
 .card { font-family: sans-serif; background: #f4f6f9; text-align: left; }
 .ep-front, .ep-back { max-width: 550px; margin: auto; padding: 20px; }
@@ -51,34 +52,70 @@ CARD_CSS = """
 """
 
 # ═══════════════════════════════════════════════
-#   各関数
+#   ロジック強化：話者ラベルベースの解析
 # ═══════════════════════════════════════════════
-def notion_headers():
-    return {"Authorization": f"Bearer {NOTION_TOKEN}", "Notion-Version": NOTION_VERSION, "Content-Type": "application/json"}
+def get_speech_lines(phrase):
+    """
+    「A:」「B:」の出現を基準にテキストを分割する。
+    戻り値: [{'speaker': 'A', 'text': '...'}, {'speaker': 'B', 'text': '...'}]
+    """
+    # 正規表現で A: または B: を区切り文字として分割
+    raw_parts = re.split(r'(A:|B:)', phrase)
+    
+    lines = []
+    current_speaker = "A" # デフォルト
+    
+    for part in raw_parts:
+        p = part.strip()
+        if not p: continue
+        
+        if p == "A:":
+            current_speaker = "A"
+        elif p == "B:":
+            current_speaker = "B"
+        else:
+            # ラベルの直後に来るのがその話者のテキスト
+            lines.append({"speaker": current_speaker, "text": p})
+            
+    return lines
 
-def get_pending_phrases():
-    url = f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}/query"
-    payload = {} if FORCE_REGEN else {"filter": {"or": [{"property": PROP_STATUS, "select": {"is_empty": True}}, {"property": PROP_STATUS, "select": {"equals": STATUS_ERROR}}]}}
-    res = requests.post(url, headers=notion_headers(), json=payload, timeout=15)
-    res.raise_for_status()
-    results = []
-    for page in res.json().get("results", []):
-        try:
-            phrase = page["properties"][PROP_PHRASE]["title"][0]["text"]["content"].strip()
-            if phrase: results.append({"phrase": phrase, "page_id": page["id"]})
-        except: continue
-    return results
+def generate_content(client, speech_lines: list) -> dict:
+    # ラベル（A: B:）の合計個数 ＝ 解説の必要数
+    label_count = len(speech_lines)
+    input_text = "\n".join([f"{l['speaker']}: {l['text']}" for l in speech_lines])
+    
+    # プロンプトで個数を厳格に指定
+    prompt = f"""Explain the nuance of EACH phrase marked with A: or B: in the following dialogue. 
+Focus on the speaker’s intention and feeling. Simple and natural. 
 
-def update_notion_status(page_id, status):
-    requests.patch(f"https://api.notion.com/v1/pages/{page_id}", headers=notion_headers(), json={"properties": {PROP_STATUS: {"select": {"name": status}}}}, timeout=10)
+CRITICAL RULE: 
+The input has exactly {label_count} labeled phrases. 
+You MUST provide exactly {label_count} explanations in the "meanings" array. 
+One explanation per phrase, in the same order.
 
-def generate_content(client, phrase: str) -> dict:
-    prompt = f'Explain the nuance of the phrase "{phrase}" as used by native speakers. Focus on intention/feeling. Simple and natural. If it is A: B: dialogue, provide explanation for EACH. Return ONLY valid JSON: {{"meanings": ["explanation1", "explanation2"]}}'
+Input:
+{input_text}
+
+Return ONLY valid JSON: 
+{{
+  "meanings": ["explanation for phrase 1", "explanation for phrase 2", ...]
+}}"""
+
     for attempt in range(5):
         try:
-            response = client.models.generate_content(model=GEMINI_MODEL, contents=prompt, config=types.GenerateContentConfig(response_mime_type="application/json", temperature=0.4))
+            response = client.models.generate_content(
+                model=GEMINI_MODEL, 
+                contents=prompt, 
+                config=types.GenerateContentConfig(response_mime_type="application/json", temperature=0.2)
+            )
             data = json.loads(response.text.strip())
-            data["phrase_display"] = phrase
+            
+            # 念のための整合性チェック（足りなければ補完）
+            while len(data["meanings"]) < label_count:
+                data["meanings"].append("(Check original text for nuance)")
+            # 多すぎればカット
+            data["meanings"] = data["meanings"][:label_count]
+            
             return data
         except Exception as e:
             if "429" in str(e):
@@ -86,6 +123,9 @@ def generate_content(client, phrase: str) -> dict:
                 continue
             raise e
 
+# ═══════════════════════════════════════════════
+#   音声生成・ビルド（以下、前回の安定版を継承）
+# ═══════════════════════════════════════════════
 async def _tts_bytes(text, voice):
     communicate = edge_tts.Communicate(text, voice=voice, rate=TTS_RATE)
     data = b""
@@ -93,40 +133,26 @@ async def _tts_bytes(text, voice):
         if chunk["type"] == "audio": data += chunk["data"]
     return data
 
-async def process_audio(phrase: str, meanings: list, uid: str, tmpdir: str):
-    parts = re.split(r'(A:|B:)', phrase)
+async def process_audio(speech_lines: list, meanings: list, uid: str, tmpdir: str):
     s_files, m_files = [], []
     combined = AudioSegment.empty()
-    m_idx = 0
-    if len(parts) > 1:
-        current_speaker = "A"
-        for part in parts:
-            clean = part.strip()
-            if clean == "A:": current_speaker = "A"; continue
-            if clean == "B:": current_speaker = "B"; continue
-            if not clean: continue
-            s_data = await _tts_bytes(re.sub(r'\(|\)', '', clean), CONV_VOICES[current_speaker])
-            s_fn = f"s_{uid}_{m_idx}.mp3"
-            (Path(tmpdir) / s_fn).write_bytes(s_data)
-            s_files.append(s_fn)
-            combined += AudioSegment.from_file(io.BytesIO(s_data), format="mp3") + AudioSegment.silent(duration=500)
-            if m_idx < len(meanings):
-                m_data = await _tts_bytes(meanings[m_idx], CONV_VOICES["B"])
-                m_fn = f"m_{uid}_{m_idx}.mp3"
-                (Path(tmpdir) / m_fn).write_bytes(m_data)
-                m_files.append(m_fn)
-            m_idx += 1
-    else:
-        s_data = await _tts_bytes(re.sub(r'\(|\)', '', phrase), CONV_VOICES["A"])
-        s_fn = f"s_{uid}_0.mp3"
+    
+    for idx, line in enumerate(speech_lines):
+        # 1. 発言音声
+        clean_text = re.sub(r'\(|\)', '', line['text'])
+        s_data = await _tts_bytes(clean_text, CONV_VOICES.get(line['speaker'], "en-US-BrianNeural"))
+        s_fn = f"s_{uid}_{idx}.mp3"
         (Path(tmpdir) / s_fn).write_bytes(s_data)
         s_files.append(s_fn)
-        combined += AudioSegment.from_file(io.BytesIO(s_data), format="mp3")
-        if meanings:
-            m_data = await _tts_bytes(meanings[0], CONV_VOICES["B"])
-            m_fn = f"m_{uid}_0.mp3"
-            (Path(tmpdir) / m_fn).write_bytes(m_data)
-            m_files.append(m_fn)
+        combined += AudioSegment.from_file(io.BytesIO(s_data), format="mp3") + AudioSegment.silent(duration=500)
+        
+        # 2. 解説音声
+        m_text = meanings[idx]
+        m_data = await _tts_bytes(m_text, CONV_VOICES["B"])
+        m_fn = f"m_{uid}_{idx}.mp3"
+        (Path(tmpdir) / m_fn).write_bytes(m_data)
+        m_files.append(m_fn)
+
     f_fn = f"full_{uid}.mp3"
     combined.export(str(Path(tmpdir) / f_fn), format="mp3")
     return f_fn, s_files, m_files
@@ -138,38 +164,59 @@ def format_script_text(text: str) -> str:
 def build_front(f_fn):
     return f'<div class="ep-front">[sound:{f_fn}]<div class="sec-label">Listen</div><div class="vbtn" onclick="document.getElementById(\'fa1\').play()"><div class="vp">▶</div><div>Play Full</div><audio id="fa1" src="{f_fn}"></audio></div></div>'
 
-def build_back(s_files, m_files, content):
-    phrase_raw = content["phrase_display"]
-    meanings = content.get("meanings", [])
-    lines = re.split(r'(A:|B:)', phrase_raw)
-    combined_html, idx = "", 0
-    if len(lines) > 1:
-        cur = ""
-        for part in lines:
-            clean = part.strip()
-            if clean in ["A:", "B:"]: cur = clean; continue
-            if not clean: continue
-            disp = format_script_text(f"{cur} {clean}")
-            mt = meanings[idx] if idx < len(meanings) else ""
-            s_fn, m_fn = s_files[idx], m_files[idx]
-            combined_html += f'<div class="sentence-row"><div class="splay-wrap"><div class="splay" onclick="document.getElementById(\'s{idx}\').play()">▶ Voice</div><audio id="s{idx}" src="{s_fn}"></audio></div><div class="sentence-content"><div class="sentence">{disp}</div><div class="meaning-box"><div class="mini-meaning"><i>{mt}</i></div><div class="mplay" onclick="document.getElementById(\'m{idx}\').play()">🔊 Explain</div><audio id="m{idx}" src="{m_fn}"></audio></div></div></div>'
-            idx += 1
-    else:
-        disp = format_script_text(phrase_raw)
-        mt = meanings[0] if meanings else ""
-        combined_html += f'<div class="sentence-row"><div class="splay-wrap"><div class="splay" onclick="document.getElementById(\'s0\').play()">▶ Voice</div><audio id="s0" src="{s_files[0]}"></audio></div><div class="sentence-content"><div class="sentence">{disp}</div><div class="meaning-box"><div class="mini-meaning"><i>{mt}</i></div><div class="mplay" onclick="document.getElementById(\'m0\').play()">🔊 Explain</div><audio id="m0" src="{m_files[0]}"></audio></div></div></div>'
+def build_back(speech_lines, s_files, m_files, meanings):
+    combined_html = ""
+    for idx, line in enumerate(speech_lines):
+        disp = format_script_text(f"{line['speaker']}: {line['text']}")
+        mt = meanings[idx]
+        s_fn = s_files[idx]
+        m_fn = m_files[idx]
+        
+        combined_html += f"""
+        <div class="sentence-row">
+            <div class="splay-wrap">
+                <div class="splay" onclick="document.getElementById('s{idx}').play()">▶ Voice</div>
+                <audio id="s{idx}" src="{s_fn}"></audio>
+            </div>
+            <div class="sentence-content">
+                <div class="sentence">{disp}</div>
+                <div class="meaning-box">
+                    <div class="mini-meaning"><i>{mt}</i></div>
+                    <div class="mplay" onclick="document.getElementById('m{idx}').play()">🔊 Explain</div>
+                    <audio id="m{idx}" src="{m_fn}"></audio>
+                </div>
+            </div>
+        </div>"""
     return f'<div class="ep-back"><div style="margin-bottom:10px"><span class="rl rn">● Script & Nuance</span></div>{combined_html}</div>'
 
+# ═══════════════════════════════════════════════
+#   Main
+# ═══════════════════════════════════════════════
 def main():
     current_dir = Path(__file__).parent.absolute()
     output_path = current_dir / "output"
     output_path.mkdir(parents=True, exist_ok=True)
     client = genai.Client(api_key=GEMINI_API_KEY)
-    pending = get_pending_phrases()
+    
+    # Notionから未処理データ取得
+    url = f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}/query"
+    payload = {} if FORCE_REGEN else {"filter": {"or": [{"property": PROP_STATUS, "select": {"is_empty": True}}, {"property": PROP_STATUS, "select": {"equals": STATUS_ERROR}}]}}
+    res = requests.post(url, headers={"Authorization": f"Bearer {NOTION_TOKEN}", "Notion-Version": NOTION_VERSION, "Content-Type": "application/json"}, json=payload, timeout=15)
+    res.raise_for_status()
+    
+    pending = []
+    for page in res.json().get("results", []):
+        try:
+            phrase = page["properties"][PROP_PHRASE]["title"][0]["text"]["content"].strip()
+            if phrase: pending.append({"phrase": phrase, "page_id": page["id"]})
+        except: continue
+
     if not pending: return
-    model = genanki.Model(ANKI_MODEL_ID, "EP_Model_v12", fields=[{"name": "Front"}, {"name": "Back"}], templates=[{"name": "Card 1", "qfmt": "{{Front}}", "afmt": "{{Back}}"}], css=CARD_CSS)
+
+    model = genanki.Model(ANKI_MODEL_ID, "EP_Model_v14", fields=[{"name": "Front"}, {"name": "Back"}], templates=[{"name": "Card 1", "qfmt": "{{Front}}", "afmt": "{{Back}}"}], css=CARD_CSS)
     deck = genanki.Deck(ANKI_DECK_ID, "English Phrases (Auto)")
     all_media = []
+
     with tempfile.TemporaryDirectory() as tmpdir:
         for i, item in enumerate(pending, 1):
             phrase = item["phrase"]
@@ -177,15 +224,26 @@ def main():
             uid = hashlib.md5(phrase.encode()).hexdigest()[:10]
             try:
                 if i > 1: time.sleep(12)
-                content = generate_content(client, phrase)
-                f_fn, s_files, m_files = asyncio.run(process_audio(phrase, content.get("meanings", []), uid, tmpdir))
+                
+                # 1. 話者ラベルの個数ベースで分割
+                speech_lines = get_speech_lines(phrase)
+                # 2. コンテンツ生成（個数を厳守させる）
+                content = generate_content(client, speech_lines)
+                meanings = content["meanings"]
+                
+                # 3. 音声生成（各文＋各解説）
+                f_fn, s_files, m_files = asyncio.run(process_audio(speech_lines, meanings, uid, tmpdir))
+                
                 all_media.extend([str(Path(tmpdir) / f) for f in [f_fn] + s_files + m_files])
-                deck.add_note(genanki.Note(model=model, fields=[build_front(f_fn), build_back(s_files, m_files, content)], guid=uid))
-                update_notion_status(item["page_id"], STATUS_DONE)
+                deck.add_note(genanki.Note(model=model, fields=[build_front(f_fn), build_back(speech_lines, s_files, m_files, meanings)], guid=uid))
+                
+                # Notion更新
+                requests.patch(f"https://api.notion.com/v1/pages/{item['page_id']}", headers={"Authorization": f"Bearer {NOTION_TOKEN}", "Notion-Version": NOTION_VERSION, "Content-Type": "application/json"}, json={"properties": {PROP_STATUS: {"select": {"name": STATUS_DONE}}}}, timeout=10)
                 print("  ✅ 成功")
             except Exception as e:
                 print(f"  ❌ 失敗: {e}")
-                update_notion_status(item["page_id"], STATUS_ERROR)
+                requests.patch(f"https://api.notion.com/v1/pages/{item['page_id']}", headers={"Authorization": f"Bearer {NOTION_TOKEN}", "Notion-Version": NOTION_VERSION, "Content-Type": "application/json"}, json={"properties": {PROP_STATUS: {"select": {"name": STATUS_ERROR}}}}, timeout=10)
+
         if all_media:
             pkg = genanki.Package(deck)
             pkg.media_files = all_media
