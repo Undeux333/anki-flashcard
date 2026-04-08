@@ -1,129 +1,92 @@
-# ═══════════════════════════════════════════════
-#   音声生成 (発言＋解説の両方を生成)
-# ═══════════════════════════════════════════════
-async def process_audio(phrase: str, meanings: list, uid: str, tmpdir: str):
-    """
-    1. 各センテンスの音声
-    2. 各解説(Meaning)の音声
-    3. 表面用の全体結合音声
-    を生成します。
-    """
-    parts = re.split(r'(A:|B:)', phrase)
-    sentence_audio_files = []
-    meaning_audio_files = []
-    
-    # 結合用
-    combined_audio = AudioSegment.empty()
-    
-    if len(parts) > 1:
-        # 会話形式
-        current_speaker = "A"
-        m_idx = 0
-        for part in parts:
-            clean = part.strip()
-            if clean == "A:": current_speaker = "A"; continue
-            if clean == "B:": current_speaker = "B"; continue
-            if not clean: continue
-            
-            # --- 1. 発言の音声 ---
-            speech_text = re.sub(r'\(|\)', '', clean)
-            voice = CONV_VOICES[current_speaker]
-            s_data = await _tts_save_bytes(speech_text, voice, TTS_RATE)
-            s_fname = f"ep_{uid}_s{m_idx}.mp3"
-            (Path(tmpdir) / s_fname).write_bytes(s_data)
-            sentence_audio_files.append(s_fname)
-            
-            # 表面結合用に追加
-            segment = AudioSegment.from_file(io.BytesIO(s_data), format="mp3")
-            combined_audio += segment + AudioSegment.silent(duration=500)
-            
-            # --- 2. 解説(Meaning)の音声 ---
-            if m_idx < len(meanings):
-                m_text = meanings[m_idx]
-                # 解説は落ち着いた女性の声(Ava)で固定
-                m_data = await _tts_save_bytes(m_text, CONV_VOICES["B"], TTS_RATE)
-                m_fname = f"ep_{uid}_m{m_idx}.mp3"
-                (Path(tmpdir) / m_fname).write_bytes(m_data)
-                meaning_audio_files.append(m_fname)
-            
-            m_idx += 1
-    else:
-        # 通常形式
-        speech_text = re.sub(r'\(|\)', '', phrase)
-        s_data = await _tts_save_bytes(speech_text, CONV_VOICES["A"], TTS_RATE)
-        s_fname = f"ep_{uid}_s0.mp3"
-        (Path(tmpdir) / s_fname).write_bytes(s_data)
-        sentence_audio_files.append(s_fname)
-        
-        combined_audio += AudioSegment.from_file(io.BytesIO(s_data), format="mp3")
-        
-        if meanings:
-            m_data = await _tts_save_bytes(meanings[0], CONV_VOICES["B"], TTS_RATE)
-            m_fname = f"ep_{uid}_m0.mp3"
-            (Path(tmpdir) / m_fname).write_bytes(m_data)
-            meaning_audio_files.append(m_fname)
-
-    # 表面用フル音声
-    full_fname = f"ep_{uid}_full.mp3"
-    combined_audio.export(str(Path(tmpdir) / full_fname), format="mp3")
-    
-    return full_fname, sentence_audio_files, meaning_audio_files
-
-# ═══════════════════════════════════════════════
-#   裏面のビルド (音声ボタンを2種類配置)
-# ═══════════════════════════════════════════════
-def build_back(full_fname, s_files, m_files, content):
-    phrase_raw = content["phrase_display"]
-    meanings = content.get("meanings", [])
-    lines = re.split(r'(A:|B:)', phrase_raw)
-    
-    combined_html = ""
-    idx = 0
-    
-    if len(lines) > 1:
-        current_speaker = ""
-        for part in lines:
-            clean = part.strip()
-            if clean in ["A:", "B:"]:
-                current_speaker = clean
-                continue
-            if not clean: continue
-            
-            display_line = format_script_text(f"{current_speaker} {clean}")
-            m_text = meanings[idx] if idx < len(meanings) else ""
-            s_fn = s_files[idx] if idx < len(s_files) else ""
-            m_fn = m_files[idx] if idx < len(m_files) else ""
-            
-            combined_html += f"""
-            <div class="sentence-row">
-                <div class="splay-wrap">
-                    <div class="splay" onclick="document.getElementById('s{idx}').play()">▶ Voice</div>
-                    <audio id="s{idx}" src="{s_fn}"></audio>
-                </div>
-                <div class="sentence-content">
-                    <div class="sentence">{display_line}</div>
-                    <div class="meaning-box">
-                        <div class="mini-meaning"><i>{m_text}</i></div>
-                        <div class="mplay" onclick="document.getElementById('m{idx}').play()">🔊 Explain</div>
-                        <audio id="m{idx}" src="{m_fn}"></audio>
-                    </div>
-                </div>
-            </div>"""
-            idx += 1
-    else:
-        # (通常形式も同様に構築)
-        # ...簡略化のため中略...
-        pass
-
-    return f"""<div class="ep-back">
-<div style="margin-bottom:10px"><span class="rl rn">● Script & Nuance</span></div>
-{combined_html}
-</div>"""
-
-# CSSに音声ボタンのスタイルを追加
-CARD_CSS += """
-.splay-wrap { display: flex; flex-direction: column; gap: 5px; }
-.splay { width: 50px; height: 30px; border-radius: 15px; background: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; border: 1px solid #e2e8f0; font-size: 10px; font-weight: bold; color: #4a5568; }
-.meaning-box { display: flex; align-items: flex-end; justify-content: space-between; margin-top: 5px; background: #f8fafc; padding: 5px 8px; border-radius: 5px; }
-.mplay { font-size: 10px; color: #3182ce; cursor: pointer; font-weight: bold; padding: 2px 5px; }
+#!/usr/bin/env python3
 """
+Anki Flashcard Generator v12 — Final Robust Version
+- Gemini 3.1 Flash Lite (429 Retry)
+- Dual Audio (Sentence & Explanation)
+- Nuance-focused Prompt
+- Fixed variable scoping (CARD_CSS)
+"""
+
+import os, json, hashlib, asyncio, tempfile, requests, io, re, time
+from pathlib import Path
+from datetime import datetime
+from google import genai
+from google.genai import types
+import edge_tts
+import genanki
+from pydub import AudioSegment
+
+# ═══════════════════════════════════════════════
+#   設定・環境変数
+# ═══════════════════════════════════════════════
+GEMINI_API_KEY     = os.environ.get("GEMINI_API_KEY", "")
+NOTION_TOKEN       = os.environ.get("NOTION_TOKEN", "")
+NOTION_DATABASE_ID = os.environ.get("NOTION_DATABASE_ID", "")
+GEMINI_MODEL       = "gemini-3.1-flash-lite-preview"
+TTS_RATE           = "+0%"
+NOTION_VERSION     = "2022-06-28"
+
+PROP_PHRASE    = "Phrase"
+PROP_STATUS    = "Status"
+STATUS_DONE    = "Done"
+STATUS_ERROR   = "Error"
+
+ANKI_MODEL_ID = 1607392333
+ANKI_DECK_ID  = 2059400110
+FORCE_REGEN = os.environ.get("FORCE_REGEN", "false").lower() == "true"
+
+CONV_VOICES = {
+    "A": "en-US-BrianNeural",
+    "B": "en-US-AvaMultilingualNeural",
+}
+
+# ═══════════════════════════════════════════════
+#   CSS 定義 (エラー防止のため上部で定義)
+# ═══════════════════════════════════════════════
+CARD_CSS = """
+.card { font-family: sans-serif; background: #f4f6f9; text-align: left; }
+.ep-front, .ep-back { max-width: 550px; margin: auto; padding: 20px; }
+.sentence-row { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 20px; }
+.splay-wrap { display: flex; flex-direction: column; gap: 5px; flex-shrink: 0; }
+.splay { width: 55px; height: 32px; border-radius: 16px; background: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; border: 1px solid #e2e8f0; font-size: 10px; font-weight: bold; color: #4a5568; }
+.sentence-content { flex: 1; min-width: 0; }
+.sentence { font-size: 17px; padding: 12px; background: #fff; border-radius: 8px; color: #2d3748; line-height: 1.5; border: 1px solid #e2e8f0; }
+.sentence b { color: #000; font-weight: bold; border-bottom: 2px solid #cbd5e0; }
+.meaning-box { display: flex; align-items: flex-end; justify-content: space-between; margin-top: 8px; background: #ebf4ff; padding: 10px; border-radius: 8px; border-left: 4px solid #4299e1; }
+.mini-meaning { font-size: 14px; color: #2c5282; line-height: 1.4; flex: 1; }
+.mplay { font-size: 11px; color: #3182ce; cursor: pointer; font-weight: bold; padding: 4px 8px; background: #fff; border-radius: 12px; margin-left: 10px; flex-shrink: 0; white-space: nowrap; border: 1px solid #bee3f8; }
+.rl { font-size: 10px; font-weight: bold; padding: 2px 8px; border-radius: 10px; }
+.rn { background: #e8f4fd; color: #1d6fa4; }
+.vbtn { display: flex; align-items: center; background: #fff; padding: 10px 15px; border-radius: 10px; cursor: pointer; border: 1px solid #e2e8f0; width: fit-content; font-size: 14px; }
+.vp { width: 24px; height: 24px; border-radius: 50%; background: #ebf4ff; display: flex; align-items: center; justify-content: center; margin-right: 10px; font-size: 10px; }
+"""
+
+# ═══════════════════════════════════════════════
+#   各関数 (Notion, Gemini, Audio)
+# ═══════════════════════════════════════════════
+def notion_headers():
+    return {"Authorization": f"Bearer {NOTION_TOKEN}", "Notion-Version": NOTION_VERSION, "Content-Type": "application/json"}
+
+def get_pending_phrases():
+    url = f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}/query"
+    payload = {} if FORCE_REGEN else {"filter": {"or": [{"property": PROP_STATUS, "select": {"is_empty": True}}, {"property": PROP_STATUS, "select": {"equals": STATUS_ERROR}}]}}
+    res = requests.post(url, headers=notion_headers(), json=payload, timeout=15)
+    res.raise_for_status()
+    results = []
+    for page in res.json().get("results", []):
+        try:
+            phrase = page["properties"][PROP_PHRASE]["title"][0]["text"]["content"].strip()
+            if phrase: results.append({"phrase": phrase, "page_id": page["id"]})
+        except: continue
+    return results
+
+def update_notion_status(page_id, status):
+    requests.patch(f"https://api.notion.com/v1/pages/{page_id}", headers=notion_headers(), json={"properties": {PROP_STATUS: {"select": {"name": status}}}}, timeout=10)
+
+def generate_content(client, phrase: str) -> dict:
+    prompt = f"""Explain the nuance of this phrase as it is actually used by native speakers in everyday conversation. 
+Focus on the speaker’s intention and feeling rather than just the literal meaning. 
+Keep the explanation simple, natural, and conversational. 
+Avoid over-explaining, exaggeration, or adding unnecessary assumptions.
+
+Target
