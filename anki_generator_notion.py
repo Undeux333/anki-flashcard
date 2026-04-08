@@ -17,13 +17,14 @@ NOTION_DATABASE_ID = os.environ.get("NOTION_DATABASE_ID", "")
 GEMINI_MODEL       = "gemini-3.1-flash-lite-preview"
 
 PROP_PHRASE, PROP_STATUS = "Phrase", "Status"
-STATUS_DONE, STATUS_ERROR = "Done", "Error"
+STATUS_DONE    = "Done"
+STATUS_ERROR   = "Error"
+STATUS_TIMEOUT = "Timeout" # 🆕 追加
 
 ANKI_MODEL_ID = 1607392333
 ANKI_DECK_ID  = 2059400110
 FORCE_REGEN = os.environ.get("FORCE_REGEN", "false").lower() == "true"
 
-# パターン定義
 VOICE_CONFIG = {
     "p1": {"name": "Brian & Ava",  "A": "en-US-BrianNeural", "B": "en-US-AvaMultilingualNeural", "M": "en-US-BrianNeural"},
     "p2": {"name": "Emma & Andrew", "A": "en-US-EmmaNeural",  "B": "en-US-AndrewNeural",       "M": "en-US-EmmaNeural"},
@@ -47,18 +48,11 @@ CARD_CSS = """
 .p-btn.playing { background: #3182ce; color: #fff; }
 """
 
-# ═══════════════════════════════════════════════
-#   ロジック
-# ═══════════════════════════════════════════════
+# --- 共通ロジック (分割・TTS) ---
 def get_speech_lines(phrase):
-    # A: または B: が含まれているか判定
     has_labels = bool(re.search(r'\b[AB]:', phrase))
-    
     if not has_labels:
-        # ラベルがない場合は全文を一人(A)のセリフとする
         return [{"speaker": "A", "text": phrase.strip()}]
-    
-    # ラベルがある場合は分割
     raw_parts = re.split(r'([AB]:)', phrase)
     lines = []
     curr = "A"
@@ -73,29 +67,27 @@ def get_speech_lines(phrase):
 def generate_content(client, speech_lines):
     count = len(speech_lines)
     input_text = "\n".join([f"{l['speaker']}: {l['text']}" for l in speech_lines])
-    prompt = f'Explain the nuance of EACH phrase. Keep it short, simple, natural English. Return JSON {{"meanings": []}} with {count} items.\nInput:\n{input_text}'
-    for _ in range(3):
-        try:
-            res = client.models.generate_content(model=GEMINI_MODEL, contents=prompt, config=types.GenerateContentConfig(response_mime_type="application/json"))
-            data = json.loads(res.text.strip())
-            m = data.get("meanings", [])
-            if not isinstance(m, list): m = [str(m)]
-            while len(m) < count: m.append("...")
-            return [str(i) for i in m[:count]]
-        except: time.sleep(5)
-    return ["No explanation available"] * count
+    prompt = f'Explain the nuance of EACH phrase. Short, natural English. Return JSON {{"meanings": []}} with {count} items.\nInput:\n{input_text}'
+    # APIエラー時は例外をそのまま投げて呼び出し元でTimeout判定させる
+    res = client.models.generate_content(
+        model=GEMINI_MODEL, 
+        contents=prompt, 
+        config=types.GenerateContentConfig(response_mime_type="application/json")
+    )
+    data = json.loads(res.text.strip())
+    m = data.get("meanings", [])
+    if not isinstance(m, list): m = [str(m)]
+    while len(m) < count: m.append("...")
+    return [str(i) for i in m[:count]]
 
 async def _tts_bytes(text, voice):
-    # クリーニングと安全な文字列変換
     clean = re.sub(r'[^a-zA-Z0-9\s,.\'?!]', '', str(text)).strip()
     if not clean: return AudioSegment.silent(duration=100).raw_data 
-    try:
-        comm = edge_tts.Communicate(clean, voice=voice)
-        data = b""
-        async for chunk in comm.stream():
-            if chunk["type"] == "audio": data += chunk["data"]
-        return data
-    except: return AudioSegment.silent(duration=100).raw_data
+    comm = edge_tts.Communicate(clean, voice=voice)
+    data = b""
+    async for chunk in comm.stream():
+        if chunk["type"] == "audio": data += chunk["data"]
+    return data
 
 async def process_audio_multi(lines, meanings, uid, tmpdir):
     full_files, split_files = {}, {}
@@ -107,16 +99,11 @@ async def process_audio_multi(lines, meanings, uid, tmpdir):
             s_data = await _tts_bytes(line['text'], v)
             s_fn = f"s_{uid}_{p_id}_{idx}.mp3"
             (Path(tmpdir) / s_fn).write_bytes(s_data)
-            
-            try:
-                combined += AudioSegment.from_file(io.BytesIO(s_data), format="mp3") + AudioSegment.silent(duration=600)
-            except: pass
-
+            combined += AudioSegment.from_file(io.BytesIO(s_data), format="mp3") + AudioSegment.silent(duration=600)
             m_data = await _tts_bytes(meanings[idx], voices["M"])
             m_fn = f"m_{uid}_{p_id}_{idx}.mp3"
             (Path(tmpdir) / m_fn).write_bytes(m_data)
             p_splits.append({"s": s_fn, "m": m_fn})
-            
         f_fn = f"full_{uid}_{p_id}.mp3"
         combined.export(str(Path(tmpdir) / f_fn), format="mp3")
         full_files[p_id] = f_fn
@@ -124,9 +111,7 @@ async def process_audio_multi(lines, meanings, uid, tmpdir):
     return full_files, split_files
 
 def get_display_name(p_id, is_conv):
-    if is_conv:
-        return VOICE_CONFIG[p_id]["name"]
-    # 一人の場合: A役の声の末尾の名前を取得
+    if is_conv: return VOICE_CONFIG[p_id]["name"]
     return VOICE_CONFIG[p_id]["A"].split('-')[-1].replace('Neural', '')
 
 def build_front(full_files, is_conv):
@@ -150,13 +135,26 @@ def build_back(lines, meanings, splits, is_conv):
         rows += f'<div class="sentence-row"><div class="sentence-content"><div class="sentence">{prefix}{txt}</div><div class="meaning-box"><i>{meanings[idx]}</i></div><div class="play-controls">{ctrls}</div>{tags}</div></div>'
     return f'<div class="ep-back"><span class="sec-label">Script & Nuance</span>{rows}<script>function pc(p,i){{sa();document.getElementById("b_"+p+"_"+i).classList.add("playing");document.getElementById("s_"+p+"_"+i).play();}}function sa(){{var a=document.getElementsByTagName("audio");for(var i=0;i<a.length;i++){{a[i].pause();a[i].currentTime=0;}}var b=document.getElementsByClassName("p-btn");for(var i=0;i<b.length;i++){{b[i].classList.remove("playing");}}}}</script></div>'
 
+# --- メイン処理 ---
 def main():
     out = Path(__file__).parent / "output"
     out.mkdir(exist_ok=True)
     client = genai.Client(api_key=GEMINI_API_KEY)
     headers = {"Authorization": f"Bearer {NOTION_TOKEN}", "Notion-Version": "2022-06-28", "Content-Type": "application/json"}
     
-    res = requests.post(f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}/query", headers=headers, json={} if FORCE_REGEN else {"filter": {"property": PROP_STATUS, "select": {"is_empty": True}}})
+    # 🆕 フィルター設定: Statusが「空欄」または「Timeout」
+    filter_payload = {}
+    if not FORCE_REGEN:
+        filter_payload = {
+            "filter": {
+                "or": [
+                    {"property": PROP_STATUS, "select": {"is_empty": True}},
+                    {"property": PROP_STATUS, "select": {"equals": STATUS_TIMEOUT}}
+                ]
+            }
+        }
+
+    res = requests.post(f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}/query", headers=headers, json=filter_payload)
     res.raise_for_status()
     
     pending = []
@@ -175,14 +173,16 @@ def main():
     media = []
 
     with tempfile.TemporaryDirectory() as tmp:
-        for i, item in enumerate(pending):
+        for item in pending:
             uid = hashlib.md5(item["p"].encode()).hexdigest()[:8]
             try:
                 lines = get_speech_lines(item["p"])
-                # 会話判定: A: B: ラベルがあるか、または2行以上の発言があるか
                 is_conv = any(":" in item["p"] for _ in [0]) and (any(l["speaker"] == "B" for l in lines) or len(lines) > 1)
                 
+                # Gemini生成 (APIエラー時は例外が発生)
                 meanings = generate_content(client, lines)
+                
+                # 音声生成
                 ff, sf = asyncio.run(process_audio_multi(lines, meanings, uid, tmp))
                 
                 for f in ff.values(): media.append(str(Path(tmp)/f))
@@ -190,11 +190,23 @@ def main():
                     for x in p: media.append(str(Path(tmp)/x["s"])); media.append(str(Path(tmp)/x["m"]))
                 
                 deck.add_note(genanki.Note(model=model, fields=[build_front(ff, is_conv), build_back(lines, meanings, sf, is_conv)], guid=uid))
+                
+                # 完了更新
                 requests.patch(f"https://api.notion.com/v1/pages/{item['id']}", headers=headers, json={"properties": {PROP_STATUS: {"select": {"name": STATUS_DONE}}}})
                 print(f"✅ {uid}")
-            except Exception as e: 
-                print(f"❌ Error at {uid}: {e}")
-                requests.patch(f"https://api.notion.com/v1/pages/{item['id']}", headers=headers, json={"properties": {PROP_STATUS: {"select": {"name": STATUS_ERROR}}}})
+
+            except Exception as e:
+                # 🆕 エラーの種類でステータスを分岐
+                err_msg = str(e).lower()
+                # 503(Overloaded), 429(Quota), deadline, timeout 等が含まれる場合
+                if any(x in err_msg for x in ["timeout", "deadline", "429", "503", "limit", "exhausted"]):
+                    new_status = STATUS_TIMEOUT
+                    print(f"⏳ Timeout/Limit at {uid}: {e}")
+                else:
+                    new_status = STATUS_ERROR
+                    print(f"❌ Unexpected Error at {uid}: {e}")
+                
+                requests.patch(f"https://api.notion.com/v1/pages/{item['id']}", headers=headers, json={"properties": {PROP_STATUS: {"select": {"name": new_status}}}})
 
         if media:
             pkg = genanki.Package(deck)
