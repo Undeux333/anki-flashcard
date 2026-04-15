@@ -14,12 +14,16 @@ from pydub import AudioSegment
 GEMINI_API_KEY     = os.environ.get("GEMINI_API_KEY", "")
 NOTION_TOKEN       = os.environ.get("NOTION_TOKEN", "")
 NOTION_DATABASE_ID = os.environ.get("NOTION_DATABASE_ID", "")
+GITHUB_TOKEN       = os.environ.get("GITHUB_TOKEN", "")
+GITHUB_REPOSITORY  = os.environ.get("GITHUB_REPOSITORY", "")  # "owner/repo"
 GEMINI_MODEL       = "gemini-3.1-flash-lite-preview"
 TTS_RATE           = "+0%"
 NOTION_VERSION     = "2022-06-28"
 
-PROP_PHRASE    = "Phrase"
-PROP_STATUS    = "Status"
+PROP_PHRASE        = "Phrase"
+PROP_STATUS        = "Status"
+PROP_GENERATED_AT  = "Generated At"
+PROP_RELEASE_URL   = "Release URL"
 
 STATUS_READY   = "Ready"
 STATUS_DONE    = "Done"
@@ -35,6 +39,47 @@ CONV_VOICES = {
     "A": "en-US-BrianNeural",
     "B": "en-US-AvaMultilingualNeural",
 }
+
+# ═══════════════════════════════════════════════
+#   GitHub Releases
+# ═══════════════════════════════════════════════
+def create_github_release(file_path: Path, timestamp: str) -> str:
+    """
+    GitHub Releasesに新規リリースを作成して.apkgをアップロードする。
+    成功時はアセットのダウンロードURLを返す。
+    """
+    if not GITHUB_TOKEN or not GITHUB_REPOSITORY:
+        print("  ⚠️  GITHUB_TOKEN または GITHUB_REPOSITORY が未設定のためリリースをスキップ")
+        return ""
+
+    headers = {
+        "Authorization": f"Bearer {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28"
+    }
+    tag = f"deck-{timestamp}"
+    title = f"Anki Cards {timestamp}"
+
+    # リリース作成
+    release_res = requests.post(
+        f"https://api.github.com/repos/{GITHUB_REPOSITORY}/releases",
+        headers=headers,
+        json={"tag_name": tag, "name": title, "draft": False, "prerelease": False},
+        timeout=30
+    )
+    release_res.raise_for_status()
+    upload_url = release_res.json()["upload_url"].split("{")[0]
+
+    # アセットアップロード
+    with open(file_path, "rb") as f:
+        asset_res = requests.post(
+            f"{upload_url}?name={file_path.name}",
+            headers={**headers, "Content-Type": "application/octet-stream"},
+            data=f,
+            timeout=120
+        )
+    asset_res.raise_for_status()
+    return asset_res.json()["browser_download_url"]
 
 CARD_CSS = """
 .card { font-family: sans-serif; background: #f4f6f9; text-align: left; }
@@ -337,6 +382,7 @@ def main():
     )
     deck = genanki.Deck(ANKI_DECK_ID, "English Phrases (Auto)")
     all_media = []
+    done_page_ids = []  # リリースURL記録用
 
     with tempfile.TemporaryDirectory() as tmpdir:
         for i, item in enumerate(pending, 1):
@@ -371,6 +417,7 @@ def main():
                     json={"properties": {PROP_STATUS: {"select": {"name": STATUS_DONE}}}},
                     timeout=10
                 )
+                done_page_ids.append(page_id)
                 print("    ✅ 成功")
 
             except Exception as e:
@@ -385,11 +432,41 @@ def main():
                 )
 
         if all_media:
+            timestamp = datetime.now().strftime("%Y%m%d%H%M")
+            final_name = output_path / f"anki_cards_{timestamp}.apkg"
             pkg = genanki.Package(deck)
             pkg.media_files = all_media
-            final_name = output_path / f"deck_{datetime.now().strftime('%m%d%H%M')}.apkg"
             pkg.write_to_file(str(final_name))
             print(f"📦 生成完了: {final_name}")
+
+            # GitHub Releases にアップロード
+            release_url = ""
+            try:
+                print("🚀 GitHub Releases にアップロード中...")
+                release_url = create_github_release(final_name, timestamp)
+                if release_url:
+                    print(f"✅ リリース完了: {release_url}")
+            except Exception as e:
+                print(f"⚠️  GitHub Releases アップロード失敗: {e}")
+
+            # 成功済みページに Generated At と Release URL を記録
+            if done_page_ids:
+                generated_at = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+                notion_props = {
+                    PROP_GENERATED_AT: {"date": {"start": generated_at}}
+                }
+                if release_url:
+                    notion_props[PROP_RELEASE_URL] = {"url": release_url}
+                for page_id in done_page_ids:
+                    try:
+                        requests.patch(
+                            f"https://api.notion.com/v1/pages/{page_id}",
+                            headers={"Authorization": f"Bearer {NOTION_TOKEN}", "Notion-Version": NOTION_VERSION, "Content-Type": "application/json"},
+                            json={"properties": notion_props},
+                            timeout=10
+                        )
+                    except Exception as e:
+                        print(f"⚠️  Notion更新失敗 ({page_id}): {e}")
 
 if __name__ == "__main__":
     main()
