@@ -1,29 +1,22 @@
 name: Generate Anki Cards
-
 on:
   schedule:
     - cron: '*/30 * * * *'
   workflow_dispatch:
-
 jobs:
   generate:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
       - name: Install ffmpeg
         run: sudo apt-get install -y ffmpeg
-
       - name: Install dependencies
         run: pip install -r requirements.txt
-
       - name: Generate Anki cards
         id: generate
         env:
@@ -37,7 +30,6 @@ jobs:
           else
             echo "apkg_exists=false" >> $GITHUB_OUTPUT
           fi
-
       - name: Upload .apkg as artifact
         if: steps.generate.outputs.apkg_exists == 'true'
         uses: actions/upload-artifact@v4
@@ -46,33 +38,55 @@ jobs:
           path: output/*.apkg
           if-no-files-found: ignore
           retention-days: 30
-
       - name: Upload to GitHub Releases and notify
         if: steps.generate.outputs.apkg_exists == 'true'
         env:
-          GH_TOKEN:   ${{ secrets.GH_TOKEN }}
-          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
-          REPO:       ${{ github.repository }}
+          GH_TOKEN:     ${{ secrets.GH_TOKEN }}
+          NTFY_TOPIC:   ${{ secrets.NTFY_TOPIC }}
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          REPO:         ${{ github.repository }}
         run: |
-          TAG="anki-latest"
-          FIXED_NAME="anki_cards.apkg"
+          TIMESTAMP=$(date +"%Y%m%d%H%M")
+          APKG_FILE=$(ls output/anki_cards_*.apkg | head -1)
+          TAG="deck-${TIMESTAMP}"
 
-          # ファイル名を固定名にコピー
-          cp $(ls output/*.apkg | head -1) "output/${FIXED_NAME}"
-
-          # 既存リリースを削除
-          gh release delete "$TAG" --yes 2>/dev/null || true
-          sleep 3
-
-          # 固定名でリリース作成
-          gh release create "$TAG" "output/${FIXED_NAME}" \
-            --title "Latest Anki Cards" \
+          # タイムスタンプ付きリリースを新規作成（履歴を保持）
+          gh release create "$TAG" "$APKG_FILE" \
+            --title "Anki Cards ${TIMESTAMP}" \
             --notes "Auto-generated" \
             --repo "$REPO"
 
-          # 固定ダウンロードURL
-          DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${TAG}/${FIXED_NAME}"
+          FILENAME=$(basename "$APKG_FILE")
+          DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${TAG}/${FILENAME}"
           echo "Download URL: $DOWNLOAD_URL"
+
+          # done_pages.json が存在すれば Notion に Release URL を記録
+          if [ -f output/done_pages.json ]; then
+            python3 - <<EOF
+import json, requests, os
+
+page_ids = json.load(open("output/done_pages.json"))
+headers = {
+    "Authorization": f"Bearer {os.environ['NOTION_TOKEN']}",
+    "Notion-Version": "2022-06-28",
+    "Content-Type": "application/json"
+}
+download_url = "$DOWNLOAD_URL"
+
+for pid in page_ids:
+    try:
+        requests.patch(
+            f"https://api.notion.com/v1/pages/{pid}",
+            headers=headers,
+            json={"properties": {"Release URL": {"url": download_url}}},
+            timeout=10
+        )
+    except Exception as e:
+        print(f"Notion update failed ({pid}): {e}")
+
+print(f"Updated {len(page_ids)} pages with Release URL")
+EOF
+          fi
 
           # ntfy で通知
           curl -s \
