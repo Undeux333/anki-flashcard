@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 import os, json, hashlib, asyncio, tempfile, requests, io, re, time
 from pathlib import Path
@@ -21,7 +22,6 @@ NOTION_VERSION     = "2022-06-28"
 PROP_PHRASE    = "Phrase"
 PROP_STATUS    = "Status"
 
-# ステータス値
 STATUS_READY   = "Ready"
 STATUS_DONE    = "Done"
 STATUS_ERROR   = "Error"
@@ -40,42 +40,64 @@ CONV_VOICES = {
 CARD_CSS = """
 .card { font-family: sans-serif; background: #f4f6f9; text-align: left; }
 .ep-front, .ep-back { max-width: 550px; margin: auto; padding: 20px; }
+
+/* Front: play button */
+.listen-label { font-size: 14px; color: #2d3748; margin-bottom: 14px; }
+.play-full-btn { display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; font-size: 14px; color: #2d3748; cursor: pointer; width: fit-content; margin-bottom: 22px; }
+
+/* Front: conversation structure */
+.conv { display: flex; flex-direction: column; gap: 8px; }
+.conv-row { display: flex; align-items: center; gap: 10px; }
+.conv-speaker { font-size: 12px; font-weight: bold; color: #718096; min-width: 22px; flex-shrink: 0; }
+.conv-bar { height: 38px; border-radius: 8px; background: #edf2f7; border: 1px solid #e2e8f0; flex: 1; }
+.conv-predict { height: 38px; border-radius: 8px; background: #edf2f7; border: 1.5px solid #f6c026; flex: 1; display: flex; align-items: center; padding: 0 12px; gap: 6px; font-size: 12px; color: #718096; font-weight: bold; }
+
+/* Back */
 .sentence-row { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 20px; }
 .splay-wrap { display: flex; flex-direction: column; gap: 5px; flex-shrink: 0; }
 .splay { width: 55px; height: 32px; border-radius: 16px; background: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; border: 1px solid #e2e8f0; font-size: 10px; font-weight: bold; color: #4a5568; }
 .sentence-content { flex: 1; min-width: 0; }
 .sentence { font-size: 17px; padding: 12px; background: #fff; border-radius: 8px; color: #2d3748; line-height: 1.5; border: 1px solid #e2e8f0; }
+.sentence.predict { border: 1.5px solid #f6c026; }
 .sentence b { color: #000; font-weight: bold; border-bottom: 2px solid #cbd5e0; }
 .meaning-box { display: flex; align-items: flex-end; justify-content: space-between; margin-top: 8px; background: #ebf4ff; padding: 10px; border-radius: 8px; border-left: 4px solid #4299e1; }
 .mini-meaning { font-size: 14px; color: #2c5282; line-height: 1.4; flex: 1; }
 .mplay { font-size: 11px; color: #3182ce; cursor: pointer; font-weight: bold; padding: 4px 8px; background: #fff; border-radius: 12px; margin-left: 10px; flex-shrink: 0; white-space: nowrap; border: 1px solid #bee3f8; }
 .rl { font-size: 10px; font-weight: bold; padding: 2px 8px; border-radius: 10px; }
 .rn { background: #e8f4fd; color: #1d6fa4; }
-.vbtn { display: flex; align-items: center; background: #fff; padding: 10px 15px; border-radius: 10px; cursor: pointer; border: 1px solid #e2e8f0; width: fit-content; font-size: 14px; }
-.vp { width: 24px; height: 24px; border-radius: 50%; background: #ebf4ff; display: flex; align-items: center; justify-content: center; margin-right: 10px; font-size: 10px; }
 """
 
 # ═══════════════════════════════════════════════
 #   ロジック
 # ═══════════════════════════════════════════════
 def get_speech_lines(phrase):
-    raw_parts = re.split(r'(A:|B:)', phrase)
+    """A: / B: / A?: / B?: を解析し hidden フラグを付与する"""
+    raw_parts = re.split(r'(A\?:|B\?:|A:|B:)', phrase)
     lines = []
     current_speaker = "A"
+    current_hidden = False
     for part in raw_parts:
         p = part.strip()
-        if not p: continue
-        if p == "A:": current_speaker = "A"
-        elif p == "B:": current_speaker = "B"
-        else: lines.append({"speaker": current_speaker, "text": p})
+        if not p:
+            continue
+        if p == "A:":
+            current_speaker = "A"; current_hidden = False
+        elif p == "B:":
+            current_speaker = "B"; current_hidden = False
+        elif p == "A?:":
+            current_speaker = "A"; current_hidden = True
+        elif p == "B?:":
+            current_speaker = "B"; current_hidden = True
+        else:
+            lines.append({"speaker": current_speaker, "text": p, "hidden": current_hidden})
     return lines
 
 def generate_content(client, speech_lines: list) -> dict:
     label_count = len(speech_lines)
     input_text = "\n".join([f"{l['speaker']}: {l['text']}" for l in speech_lines])
-    
+
     prompt = f"""Explain the nuance of EACH phrase marked with A: or B: in the following dialogue. 
-Explain how this phrase is used in everyday conversation by native speakers by briefly describing the situation or feeling it is used for. Focus on the speaker’s feeling and intention. Keep it short, simple, and natural in one sentence. Use plain, everyday English. Avoid abstract or textbook-like language, and avoid extra details or unnecessary assumptions. Write as if explaining to an English learner in a casual conversation.
+Explain how this phrase is used in everyday conversation by native speakers by briefly describing the situation or feeling it is used for. Focus on the speaker's feeling and intention. Keep it short, simple, and natural in one sentence. Use plain, everyday English. Avoid abstract or textbook-like language, and avoid extra details or unnecessary assumptions. Write as if explaining to an English learner in a casual conversation.
 CRITICAL RULE: 
 The input has exactly {label_count} labeled phrases. 
 You MUST provide exactly {label_count} explanations in the "meanings" array. 
@@ -92,8 +114,8 @@ Return ONLY valid JSON:
     for attempt in range(5):
         try:
             response = client.models.generate_content(
-                model=GEMINI_MODEL, 
-                contents=prompt, 
+                model=GEMINI_MODEL,
+                contents=prompt,
                 config=types.GenerateContentConfig(response_mime_type="application/json", temperature=0.2)
             )
             data = json.loads(response.text.strip())
@@ -111,53 +133,105 @@ async def _tts_bytes(text, voice):
     communicate = edge_tts.Communicate(text, voice=voice, rate=TTS_RATE)
     data = b""
     async for chunk in communicate.stream():
-        if chunk["type"] == "audio": data += chunk["data"]
+        if chunk["type"] == "audio":
+            data += chunk["data"]
     return data
 
 async def process_audio(speech_lines: list, meanings: list, uid: str, tmpdir: str):
     s_files, m_files = [], []
-    combined = AudioSegment.empty()
+    front_audio = AudioSegment.empty()
+    last_idx = len(speech_lines) - 1
+
     for idx, line in enumerate(speech_lines):
         clean_text = re.sub(r'\(|\)', '', line['text'])
-        s_data = await _tts_bytes(clean_text, CONV_VOICES.get(line['speaker'], "en-US-BrianNeural"))
+        voice = CONV_VOICES.get(line['speaker'], "en-US-BrianNeural")
+
+        # 各行の音声を生成（裏面用）
+        s_data = await _tts_bytes(clean_text, voice)
         s_fn = f"s_{uid}_{idx}.mp3"
         (Path(tmpdir) / s_fn).write_bytes(s_data)
         s_files.append(s_fn)
-        combined += AudioSegment.from_file(io.BytesIO(s_data), format="mp3") + AudioSegment.silent(duration=500)
-        
-        m_text = meanings[idx]
-        m_data = await _tts_bytes(m_text, CONV_VOICES["B"])
+
+        seg = AudioSegment.from_file(io.BytesIO(s_data), format="mp3")
+        trailing = AudioSegment.silent(duration=500) if idx < last_idx else AudioSegment.empty()
+
+        if line['hidden']:
+            # 非表示行 → 同じ長さの無音に置き換え（会話のリズムを保つ）
+            front_audio += AudioSegment.silent(duration=len(seg)) + trailing
+        else:
+            front_audio += seg + trailing
+
+        # 解説音声（裏面 Explain ボタン用）
+        m_data = await _tts_bytes(meanings[idx], CONV_VOICES["B"])
         m_fn = f"m_{uid}_{idx}.mp3"
         (Path(tmpdir) / m_fn).write_bytes(m_data)
         m_files.append(m_fn)
+
     f_fn = f"full_{uid}.mp3"
-    combined.export(str(Path(tmpdir) / f_fn), format="mp3")
+    front_audio.export(str(Path(tmpdir) / f_fn), format="mp3")
     return f_fn, s_files, m_files
 
 def format_script_text(text: str) -> str:
     t = text.replace("<", "&lt;").replace(">", "&gt;")
     return re.sub(r'\((.*?)\)', r'<b>\1</b>', t).replace("\n", "<br>")
 
-def build_front(f_fn):
-    return f'<div class="ep-front">[sound:{f_fn}]<div class="sec-label">Listen</div><div class="vbtn" onclick="document.getElementById(\'fa1\').play()"><div class="vp">▶</div><div>Play Full</div><audio id="fa1" src="{f_fn}"></audio></div></div>'
+def build_front(f_fn, speech_lines):
+    rows = ""
+    for line in speech_lines:
+        sp = line['speaker']
+        if line['hidden']:
+            rows += (
+                f'<div class="conv-row">'
+                f'<span class="conv-speaker">{sp}:</span>'
+                f'<div class="conv-predict">&#128172; What would you say?</div>'
+                f'</div>'
+            )
+        else:
+            rows += (
+                f'<div class="conv-row">'
+                f'<span class="conv-speaker">{sp}:</span>'
+                f'<div class="conv-bar"></div>'
+                f'</div>'
+            )
+
+    return (
+        f'<div class="ep-front">'
+        f'[sound:{f_fn}]'
+        f'<div class="listen-label">Listen</div>'
+        f'<div class="play-full-btn" onclick="document.getElementById(\'fa1\').play()">&#9654; Play Full'
+        f'<audio id="fa1" src="{f_fn}"></audio></div>'
+        f'<div class="conv">{rows}</div>'
+        f'</div>'
+    )
 
 def build_back(speech_lines, s_files, m_files, meanings):
     combined_html = ""
     for idx, line in enumerate(speech_lines):
         disp = format_script_text(f"{line['speaker']}: {line['text']}")
         mt = meanings[idx]
-        combined_html += f"""
-        <div class="sentence-row">
-            <div class="splay-wrap"><div class="splay" onclick="document.getElementById('s{idx}').play()">▶ Voice</div><audio id="s{idx}" src="{s_files[idx]}"></audio></div>
-            <div class="sentence-content">
-                <div class="sentence">{disp}</div>
-                <div class="meaning-box">
-                    <div class="mini-meaning"><i>{mt}</i></div>
-                    <div class="mplay" onclick="document.getElementById('m{idx}').play()">🔊 Explain</div><audio id="m{idx}" src="{m_files[idx]}"></audio>
-                </div>
-            </div>
-        </div>"""
-    return f'<div class="ep-back"><div style="margin-bottom:10px"><span class="rl rn">● Script & Nuance</span></div>{combined_html}</div>'
+        sentence_class = "sentence predict" if line['hidden'] else "sentence"
+        combined_html += (
+            f'<div class="sentence-row">'
+            f'<div class="splay-wrap">'
+            f'<div class="splay" onclick="document.getElementById(\'s{idx}\').play()">&#9654; Voice</div>'
+            f'<audio id="s{idx}" src="{s_files[idx]}"></audio>'
+            f'</div>'
+            f'<div class="sentence-content">'
+            f'<div class="{sentence_class}">{disp}</div>'
+            f'<div class="meaning-box">'
+            f'<div class="mini-meaning"><i>{mt}</i></div>'
+            f'<div class="mplay" onclick="document.getElementById(\'m{idx}\').play()">&#128266; Explain</div>'
+            f'<audio id="m{idx}" src="{m_files[idx]}"></audio>'
+            f'</div>'
+            f'</div>'
+            f'</div>'
+        )
+    return (
+        f'<div class="ep-back">'
+        f'<div style="margin-bottom:10px"><span class="rl rn">&#9679; Script &amp; Nuance</span></div>'
+        f'{combined_html}'
+        f'</div>'
+    )
 
 # ═══════════════════════════════════════════════
 #   Main
@@ -167,10 +241,8 @@ def main():
     output_path = current_dir / "output"
     output_path.mkdir(parents=True, exist_ok=True)
     client = genai.Client(api_key=GEMINI_API_KEY)
-    
+
     url = f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}/query"
-    
-    # 修正箇所：Statusが「Ready」または「Timeout」のみを対象とする（空欄は無視）
     filter_payload = {
         "filter": {
             "or": [
@@ -179,49 +251,83 @@ def main():
             ]
         }
     }
-    
-    if FORCE_REGEN: filter_payload = {}
+    if FORCE_REGEN:
+        filter_payload = {}
 
-    res = requests.post(url, headers={"Authorization": f"Bearer {NOTION_TOKEN}", "Notion-Version": NOTION_VERSION, "Content-Type": "application/json"}, json=filter_payload, timeout=15)
+    res = requests.post(
+        url,
+        headers={"Authorization": f"Bearer {NOTION_TOKEN}", "Notion-Version": NOTION_VERSION, "Content-Type": "application/json"},
+        json=filter_payload,
+        timeout=15
+    )
     res.raise_for_status()
-    
+
     pending = []
     for page in res.json().get("results", []):
         try:
             phrase = page["properties"][PROP_PHRASE]["title"][0]["text"]["content"].strip()
-            if phrase: pending.append({"phrase": phrase, "page_id": page["id"]})
-        except: continue
+            if phrase:
+                pending.append({"phrase": phrase, "page_id": page["id"]})
+        except:
+            continue
 
     if not pending:
         print("処理対象のデータ（Ready または Timeout）が見つかりませんでした。")
         return
 
-    model = genanki.Model(ANKI_MODEL_ID, "EP_Model_v14", fields=[{"name": "Front"}, {"name": "Back"}], templates=[{"name": "Card 1", "qfmt": "{{Front}}", "afmt": "{{Back}}"}], css=CARD_CSS)
+    model = genanki.Model(
+        ANKI_MODEL_ID, "EP_Model_v15",
+        fields=[{"name": "Front"}, {"name": "Back"}],
+        templates=[{"name": "Card 1", "qfmt": "{{Front}}", "afmt": "{{Back}}"}],
+        css=CARD_CSS
+    )
     deck = genanki.Deck(ANKI_DECK_ID, "English Phrases (Auto)")
     all_media = []
 
     with tempfile.TemporaryDirectory() as tmpdir:
         for i, item in enumerate(pending, 1):
             phrase, page_id = item["phrase"], item["page_id"]
-            print(f"[{i}/{len(pending)}] {phrase[:40]}...")
+            print(f"[{i}/{len(pending)}] {phrase[:50]}...")
             uid = hashlib.md5(phrase.encode()).hexdigest()[:10]
             try:
-                if i > 1: time.sleep(12)
+                if i > 1:
+                    time.sleep(12)
                 speech_lines = get_speech_lines(phrase)
                 content = generate_content(client, speech_lines)
                 meanings = content["meanings"]
-                
-                f_fn, s_files, m_files = asyncio.run(process_audio(speech_lines, meanings, uid, tmpdir))
+
+                f_fn, s_files, m_files = asyncio.run(
+                    process_audio(speech_lines, meanings, uid, tmpdir)
+                )
                 all_media.extend([str(Path(tmpdir) / f) for f in [f_fn] + s_files + m_files])
-                deck.add_note(genanki.Note(model=model, fields=[build_front(f_fn), build_back(speech_lines, s_files, m_files, meanings)], guid=uid))
-                
-                requests.patch(f"https://api.notion.com/v1/pages/{page_id}", headers={"Authorization": f"Bearer {NOTION_TOKEN}", "Notion-Version": NOTION_VERSION, "Content-Type": "application/json"}, json={"properties": {PROP_STATUS: {"select": {"name": STATUS_DONE}}}}, timeout=10)
+
+                deck.add_note(genanki.Note(
+                    model=model,
+                    fields=[
+                        build_front(f_fn, speech_lines),
+                        build_back(speech_lines, s_files, m_files, meanings)
+                    ],
+                    guid=uid
+                ))
+
+                requests.patch(
+                    f"https://api.notion.com/v1/pages/{page_id}",
+                    headers={"Authorization": f"Bearer {NOTION_TOKEN}", "Notion-Version": NOTION_VERSION, "Content-Type": "application/json"},
+                    json={"properties": {PROP_STATUS: {"select": {"name": STATUS_DONE}}}},
+                    timeout=10
+                )
                 print("    ✅ 成功")
+
             except Exception as e:
                 err_s = str(e).lower()
                 status_to_set = STATUS_TIMEOUT if ("429" in err_s or "timeout" in err_s or "deadline" in err_s) else STATUS_ERROR
                 print(f"    ❌ 失敗({status_to_set}): {e}")
-                requests.patch(f"https://api.notion.com/v1/pages/{page_id}", headers={"Authorization": f"Bearer {NOTION_TOKEN}", "Notion-Version": NOTION_VERSION, "Content-Type": "application/json"}, json={"properties": {PROP_STATUS: {"select": {"name": status_to_set}}}}, timeout=10)
+                requests.patch(
+                    f"https://api.notion.com/v1/pages/{page_id}",
+                    headers={"Authorization": f"Bearer {NOTION_TOKEN}", "Notion-Version": NOTION_VERSION, "Content-Type": "application/json"},
+                    json={"properties": {PROP_STATUS: {"select": {"name": status_to_set}}}},
+                    timeout=10
+                )
 
         if all_media:
             pkg = genanki.Package(deck)
