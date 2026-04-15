@@ -40,26 +40,28 @@ CARD_CSS = """
 .card { font-family: sans-serif; background: #f4f6f9; text-align: left; }
 .ep-front, .ep-back { max-width: 550px; margin: auto; padding: 20px; }
 audio { display: none; }
+.replay-button { display: none; }
 .main-btn-wrap { display: flex; justify-content: center; margin-top: 20px; }
 .main-btn { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 14px 32px; background: #2d3748; border-radius: 12px; cursor: pointer; border: none; }
 .main-btn-text { font-size: 15px; font-weight: bold; color: #fff; }
 .conv { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
-.conv-row { display: flex; align-items: center; gap: 10px; }
-.conv-speaker { font-size: 12px; font-weight: bold; color: #718096; min-width: 22px; flex-shrink: 0; }
+.conv-row { display: flex; align-items: center; gap: 0px; }
+.conv-speaker { font-size: 12px; font-weight: bold; color: #718096; flex-shrink: 0; }
 .conv-bar { height: 38px; border-radius: 8px; background: #edf2f7; border: 1px solid #e2e8f0; flex: 1; }
 .conv-predict { min-height: 38px; border-radius: 8px; background: #edf2f7; border: 1.5px solid #f6c026; flex: 1; display: flex; align-items: center; padding: 6px 12px; gap: 7px; font-size: 12px; color: #4a5568; }
 .line-block { margin-bottom: 10px; }
-.line-row { display: flex; align-items: center; gap: 8px; }
-.back-speaker { font-size: 12px; font-weight: bold; color: #718096; min-width: 22px; flex-shrink: 0; }
+.line-row { display: flex; align-items: center; gap: 0px; }
+.back-speaker { font-size: 12px; font-weight: bold; color: #718096; flex-shrink: 0; }
 .bubble { flex: 1; background: #fff; border: 0.5px solid #e2e8f0; border-radius: 10px; padding: 10px 14px; font-size: 15px; line-height: 1.5; color: #2d3748; }
 .bubble.predict { border: 1.5px solid #f6c026; }
 .bubble b { color: #000; font-weight: bold; border-bottom: 2px solid #cbd5e0; }
-.play-line-btn { font-size: 11px; color: #4a5568; cursor: pointer; font-weight: bold; padding: 5px 9px; background: #f7fafc; border-radius: 10px; white-space: nowrap; border: 1px solid #e2e8f0; flex-shrink: 0; }
-.action-row { display: flex; align-items: center; gap: 6px; margin-top: 5px; margin-left: 30px; }
+.action-row { display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin-top: 5px; }
 .explain-btn { font-size: 11px; color: #2b6cb0; cursor: pointer; font-weight: bold; padding: 4px 9px; border-radius: 10px; white-space: nowrap; border: 1px solid #bee3f8; background: #ebf4ff; }
-.script-icon-btn { font-size: 14px; cursor: pointer; padding: 3px 7px; border-radius: 8px; border: 1px solid #e2e8f0; background: #f7fafc; line-height: 1.4; }
-.script-icon-btn.on { background: #2d3748; }
-.explain-box { margin-top: 5px; margin-left: 30px; background: #ebf4ff; border-left: 3px solid #4299e1; border-radius: 0 8px 8px 0; padding: 9px 12px; font-size: 13px; color: #2c5282; font-style: italic; line-height: 1.55; display: none; }
+.script-icon-btn { font-size: 14px; cursor: pointer; padding: 3px 7px; border-radius: 8px; border: 1px solid #bee3f8; background: #ebf4ff; line-height: 1.4; }
+.script-icon-btn.on { background: #2b6cb0; border-color: #2b6cb0; }
+.slow-btn { font-size: 11px; color: #4a5568; cursor: pointer; font-weight: bold; padding: 4px 9px; background: #f7fafc; border-radius: 10px; white-space: nowrap; border: 1px solid #e2e8f0; }
+.play-line-btn { font-size: 11px; color: #4a5568; cursor: pointer; font-weight: bold; padding: 4px 9px; background: #f7fafc; border-radius: 10px; white-space: nowrap; border: 1px solid #e2e8f0; }
+.explain-box { margin-top: 5px; background: #ebf4ff; border-left: 3px solid #4299e1; border-radius: 0 8px 8px 0; padding: 9px 12px; font-size: 13px; color: #2c5282; font-style: italic; line-height: 1.55; display: none; }
 .rl { font-size: 10px; font-weight: bold; padding: 2px 8px; border-radius: 10px; }
 .rn { background: #e8f4fd; color: #1d6fa4; }
 """
@@ -163,7 +165,7 @@ async def process_audio(speech_lines: list, meanings: list, uid: str, tmpdir: st
         s_files.append(s_fn)
 
         seg = AudioSegment.from_file(io.BytesIO(s_data), format="mp3")
-        trailing = AudioSegment.silent(duration=250) if idx < last_idx else AudioSegment.empty()
+        trailing = AudioSegment.silent(duration=200) if idx < last_idx else AudioSegment.empty()
 
         # 表面用: 非表示行は最初・最後を除き無音に置き換え
         if line['hidden']:
@@ -238,12 +240,13 @@ def build_back(speech_lines, s_files, m_files, meanings, b_fn):
             f'<div class="line-row">'
             f'<span class="back-speaker">{sp}:</span>'
             f'<div class="{bubble_class}">{disp}</div>'
-            f'<div class="play-line-btn" onclick="document.getElementById(\'s{idx}\').play()">&#128266; Play</div>'
             f'<audio id="s{idx}" src="{s_files[idx]}"></audio>'
             f'</div>'
             f'<div class="action-row">'
             f'<div class="explain-btn" onclick="document.getElementById(\'m{idx}\').play()">&#128266; Explain</div>'
             f'<div class="script-icon-btn" onclick="epToggle(this,\'ex{idx}\')">&#128196;</div>'
+            f'<div class="slow-btn" onclick="epSlow(\'s{idx}\')">&#128034; Slow</div>'
+            f'<div class="play-line-btn" onclick="epPlay(\'s{idx}\')">&#128266; Play</div>'
             f'<audio id="m{idx}" src="{m_files[idx]}"></audio>'
             f'</div>'
             f'<div class="explain-box" id="ex{idx}"><i>{mt}</i></div>'
@@ -257,6 +260,14 @@ def build_back(speech_lines, s_files, m_files, meanings, b_fn):
         'var on=btn.classList.contains("on");'
         'if(on){btn.classList.remove("on");box.style.display="none";}'
         'else{btn.classList.add("on");box.style.display="block";}'
+        '}'
+        'function epPlay(id){'
+        'var a=document.getElementById(id);'
+        'a.playbackRate=1.0;a.play();'
+        '}'
+        'function epSlow(id){'
+        'var a=document.getElementById(id);'
+        'a.playbackRate=0.5;a.play();'
         '}'
         '</script>'
     )
@@ -319,7 +330,7 @@ def main():
         return
 
     model = genanki.Model(
-        ANKI_MODEL_ID, "EP_Model_v17",
+        ANKI_MODEL_ID, "EP_Model_v18",
         fields=[{"name": "Front"}, {"name": "Back"}],
         templates=[{"name": "Card 1", "qfmt": "{{Front}}", "afmt": "{{Back}}"}],
         css=CARD_CSS
