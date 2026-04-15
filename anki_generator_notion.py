@@ -39,25 +39,27 @@ CONV_VOICES = {
 CARD_CSS = """
 .card { font-family: sans-serif; background: #f4f6f9; text-align: left; }
 .ep-front, .ep-back { max-width: 550px; margin: auto; padding: 20px; }
-.play-btn-wrap { display: flex; justify-content: center; margin-bottom: 28px; }
-.play-full-btn { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 14px 32px; background: #2d3748; border-radius: 12px; cursor: pointer; border: none; }
-.play-full-btn-text { font-size: 15px; font-weight: bold; color: #fff; }
-.conv { display: flex; flex-direction: column; gap: 8px; }
+audio { display: none; }
+.main-btn-wrap { display: flex; justify-content: center; margin-top: 20px; }
+.main-btn { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 14px 32px; background: #2d3748; border-radius: 12px; cursor: pointer; border: none; }
+.main-btn-text { font-size: 15px; font-weight: bold; color: #fff; }
+.conv { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
 .conv-row { display: flex; align-items: center; gap: 10px; }
 .conv-speaker { font-size: 12px; font-weight: bold; color: #718096; min-width: 22px; flex-shrink: 0; }
 .conv-bar { height: 38px; border-radius: 8px; background: #edf2f7; border: 1px solid #e2e8f0; flex: 1; }
-.conv-predict { height: 38px; border-radius: 8px; background: #edf2f7; border: 1.5px solid #f6c026; flex: 1; display: flex; align-items: center; padding: 0 12px; gap: 6px; font-size: 12px; color: #718096; font-weight: bold; }
-.sentence-row { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 20px; }
-.back-speaker { font-size: 12px; font-weight: bold; color: #718096; min-width: 22px; flex-shrink: 0; padding-top: 14px; }
-.sentence-content { flex: 1; min-width: 0; }
-.sentence { font-size: 17px; padding: 10px 14px; background: #fff; border-radius: 8px; color: #2d3748; line-height: 1.5; border: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.sentence.predict { border: 1.5px solid #f6c026; }
-.sentence b { color: #000; font-weight: bold; border-bottom: 2px solid #cbd5e0; }
-.sentence-text { flex: 1; }
-.speak-btn { font-size: 11px; color: #4a5568; cursor: pointer; font-weight: bold; padding: 4px 8px; background: #f7fafc; border-radius: 12px; flex-shrink: 0; white-space: nowrap; border: 1px solid #e2e8f0; }
-.meaning-box { display: flex; align-items: flex-end; justify-content: space-between; margin-top: 8px; background: #ebf4ff; padding: 10px; border-radius: 8px; border-left: 4px solid #4299e1; }
-.mini-meaning { font-size: 14px; color: #2c5282; line-height: 1.4; flex: 1; }
-.mplay { font-size: 11px; color: #3182ce; cursor: pointer; font-weight: bold; padding: 4px 8px; background: #fff; border-radius: 12px; margin-left: 10px; flex-shrink: 0; white-space: nowrap; border: 1px solid #bee3f8; }
+.conv-predict { min-height: 38px; border-radius: 8px; background: #edf2f7; border: 1.5px solid #f6c026; flex: 1; display: flex; align-items: center; padding: 6px 12px; gap: 7px; font-size: 12px; color: #4a5568; }
+.line-block { margin-bottom: 10px; }
+.line-row { display: flex; align-items: center; gap: 8px; }
+.back-speaker { font-size: 12px; font-weight: bold; color: #718096; min-width: 22px; flex-shrink: 0; }
+.bubble { flex: 1; background: #fff; border: 0.5px solid #e2e8f0; border-radius: 10px; padding: 10px 14px; font-size: 15px; line-height: 1.5; color: #2d3748; }
+.bubble.predict { border: 1.5px solid #f6c026; }
+.bubble b { color: #000; font-weight: bold; border-bottom: 2px solid #cbd5e0; }
+.play-line-btn { font-size: 11px; color: #4a5568; cursor: pointer; font-weight: bold; padding: 5px 9px; background: #f7fafc; border-radius: 10px; white-space: nowrap; border: 1px solid #e2e8f0; flex-shrink: 0; }
+.action-row { display: flex; align-items: center; gap: 6px; margin-top: 5px; margin-left: 30px; }
+.explain-btn { font-size: 11px; color: #2b6cb0; cursor: pointer; font-weight: bold; padding: 4px 9px; border-radius: 10px; white-space: nowrap; border: 1px solid #bee3f8; background: #ebf4ff; }
+.script-icon-btn { font-size: 14px; cursor: pointer; padding: 3px 7px; border-radius: 8px; border: 1px solid #e2e8f0; background: #f7fafc; line-height: 1.4; }
+.script-icon-btn.on { background: #2d3748; }
+.explain-box { margin-top: 5px; margin-left: 30px; background: #ebf4ff; border-left: 3px solid #4299e1; border-radius: 0 8px 8px 0; padding: 9px 12px; font-size: 13px; color: #2c5282; font-style: italic; line-height: 1.55; display: none; }
 .rl { font-size: 10px; font-weight: bold; padding: 2px 8px; border-radius: 10px; }
 .rn { background: #e8f4fd; color: #1d6fa4; }
 """
@@ -91,6 +93,9 @@ def generate_content(client, speech_lines: list) -> dict:
     label_count = len(speech_lines)
     input_text = "\n".join([f"{l['speaker']}: {l['text']}" for l in speech_lines])
 
+    hidden_indices = [i for i, l in enumerate(speech_lines) if l['hidden']]
+    hidden_info = f"Hidden phrase indices (0-based): {hidden_indices}" if hidden_indices else "No hidden phrases."
+
     prompt = f"""Explain the nuance of EACH phrase marked with A: or B: in the following dialogue. 
 Explain how this phrase is used in everyday conversation by native speakers by briefly describing the situation or feeling it is used for. Focus on the speaker's feeling and intention. Keep it short, simple, and natural in one sentence. Use plain, everyday English. Avoid abstract or textbook-like language, and avoid extra details or unnecessary assumptions. Write as if explaining to an English learner in a casual conversation.
 CRITICAL RULE: 
@@ -98,12 +103,17 @@ The input has exactly {label_count} labeled phrases.
 You MUST provide exactly {label_count} explanations in the "meanings" array. 
 One explanation per phrase, in the same order.
 
+For hidden phrases, also provide a short hint in "hints" telling the learner what kind of response to give.
+The hint must be a natural English instruction, max 10 words. For non-hidden phrases, use null.
+{hidden_info}
+
 Input:
 {input_text}
 
 Return ONLY valid JSON: 
 {{
-  "meanings": ["explanation for phrase 1", "explanation for phrase 2", ...]
+  "meanings": ["explanation for phrase 1", "explanation for phrase 2", ...],
+  "hints": [null, "hint for hidden phrase", null, ...]
 }}"""
 
     for attempt in range(5):
@@ -117,6 +127,11 @@ Return ONLY valid JSON:
             while len(data["meanings"]) < label_count:
                 data["meanings"].append("(Check original text for nuance)")
             data["meanings"] = data["meanings"][:label_count]
+            # hints の長さを補正
+            hints = data.get("hints", [])
+            while len(hints) < label_count:
+                hints.append(None)
+            data["hints"] = hints[:label_count]
             return data
         except Exception as e:
             if "429" in str(e):
@@ -135,13 +150,13 @@ async def _tts_bytes(text, voice):
 async def process_audio(speech_lines: list, meanings: list, uid: str, tmpdir: str):
     s_files, m_files = [], []
     front_audio = AudioSegment.empty()
+    back_audio  = AudioSegment.empty()
     last_idx = len(speech_lines) - 1
 
     for idx, line in enumerate(speech_lines):
         clean_text = re.sub(r'\(|\)', '', line['text'])
         voice = CONV_VOICES.get(line['speaker'], "en-US-BrianNeural")
 
-        # 各行の音声を生成（裏面用）
         s_data = await _tts_bytes(clean_text, voice)
         s_fn = f"s_{uid}_{idx}.mp3"
         (Path(tmpdir) / s_fn).write_bytes(s_data)
@@ -150,36 +165,43 @@ async def process_audio(speech_lines: list, meanings: list, uid: str, tmpdir: st
         seg = AudioSegment.from_file(io.BytesIO(s_data), format="mp3")
         trailing = AudioSegment.silent(duration=250) if idx < last_idx else AudioSegment.empty()
 
+        # 表面用: 非表示行は最初・最後を除き無音に置き換え
         if line['hidden']:
-            # 非表示行 → 最初・最後は無音なし、中間のみ同じ長さの無音でリズムを保つ
             if idx > 0 and idx < last_idx:
                 front_audio += AudioSegment.silent(duration=len(seg)) + trailing
         else:
             front_audio += seg + trailing
 
-        # 解説音声（裏面 Explain ボタン用）
+        # 裏面用: 全行を均一なポーズで結合
+        back_audio += seg + trailing
+
         m_data = await _tts_bytes(meanings[idx], CONV_VOICES["B"])
         m_fn = f"m_{uid}_{idx}.mp3"
         (Path(tmpdir) / m_fn).write_bytes(m_data)
         m_files.append(m_fn)
 
-    f_fn = f"full_{uid}.mp3"
+    f_fn = f"front_{uid}.mp3"
     front_audio.export(str(Path(tmpdir) / f_fn), format="mp3")
-    return f_fn, s_files, m_files
+    b_fn = f"back_{uid}.mp3"
+    back_audio.export(str(Path(tmpdir) / b_fn), format="mp3")
+    return f_fn, b_fn, s_files, m_files
 
 def format_script_text(text: str) -> str:
     t = text.replace("<", "&lt;").replace(">", "&gt;")
     return re.sub(r'\((.*?)\)', r'<b>\1</b>', t).replace("\n", "<br>")
 
-def build_front(f_fn, speech_lines):
+def build_front(f_fn, speech_lines, hints):
     rows = ""
-    for line in speech_lines:
+    for idx, line in enumerate(speech_lines):
         sp = line['speaker']
         if line['hidden']:
+            hint_text = hints[idx] if hints and idx < len(hints) and hints[idx] else None
+            if hint_text is None:
+                raise ValueError(f"hint missing for hidden line {idx}: {line['text']}")
             rows += (
                 f'<div class="conv-row">'
                 f'<span class="conv-speaker">{sp}:</span>'
-                f'<div class="conv-predict">&#128172; What would you say?</div>'
+                f'<div class="conv-predict"><span style="font-size:14px;">&#127919;</span>{hint_text}</div>'
                 f'</div>'
             )
         else:
@@ -193,45 +215,64 @@ def build_front(f_fn, speech_lines):
     return (
         f'<div class="ep-front">'
         f'[sound:{f_fn}]'
-        f'<div class="play-btn-wrap">'
-        f'<div class="play-full-btn" onclick="document.getElementById(\'fa1\').play()">'
+        f'<div class="conv">{rows}</div>'
+        f'<div class="main-btn-wrap">'
+        f'<div class="main-btn" onclick="document.getElementById(\'fa1\').play()">'
         f'<span style="font-size:18px;">&#128266;</span>'
-        f'<span class="play-full-btn-text">Play conversation</span>'
+        f'<span class="main-btn-text">Play conversation</span>'
         f'<audio id="fa1" src="{f_fn}"></audio>'
         f'</div>'
         f'</div>'
-        f'<div class="conv">{rows}</div>'
         f'</div>'
     )
 
-def build_back(speech_lines, s_files, m_files, meanings):
-    combined_html = ""
+def build_back(speech_lines, s_files, m_files, meanings, b_fn):
+    rows = ""
     for idx, line in enumerate(speech_lines):
         disp = format_script_text(line['text'])
-        sp = line['speaker']
-        mt = meanings[idx]
-        sentence_class = "sentence predict" if line['hidden'] else "sentence"
-        combined_html += (
-            f'<div class="sentence-row">'
+        sp   = line['speaker']
+        mt   = meanings[idx]
+        bubble_class = "bubble predict" if line['hidden'] else "bubble"
+        rows += (
+            f'<div class="line-block">'
+            f'<div class="line-row">'
             f'<span class="back-speaker">{sp}:</span>'
-            f'<div class="sentence-content">'
-            f'<div class="{sentence_class}">'
-            f'<span class="sentence-text">{disp}</span>'
-            f'<span class="speak-btn" onclick="document.getElementById(\'s{idx}\').play()">&#128266; Speak</span>'
+            f'<div class="{bubble_class}">{disp}</div>'
+            f'<div class="play-line-btn" onclick="document.getElementById(\'s{idx}\').play()">&#128266; Play</div>'
             f'<audio id="s{idx}" src="{s_files[idx]}"></audio>'
             f'</div>'
-            f'<div class="meaning-box">'
-            f'<div class="mini-meaning"><i>{mt}</i></div>'
-            f'<div class="mplay" onclick="document.getElementById(\'m{idx}\').play()">&#128266; Explain</div>'
+            f'<div class="action-row">'
+            f'<div class="explain-btn" onclick="document.getElementById(\'m{idx}\').play()">&#128266; Explain</div>'
+            f'<div class="script-icon-btn" onclick="epToggle(this,\'ex{idx}\')">&#128196;</div>'
             f'<audio id="m{idx}" src="{m_files[idx]}"></audio>'
             f'</div>'
-            f'</div>'
+            f'<div class="explain-box" id="ex{idx}"><i>{mt}</i></div>'
             f'</div>'
         )
+
+    toggle_js = (
+        '<script>'
+        'function epToggle(btn,id){'
+        'var box=document.getElementById(id);'
+        'var on=btn.classList.contains("on");'
+        'if(on){btn.classList.remove("on");box.style.display="none";}'
+        'else{btn.classList.add("on");box.style.display="block";}'
+        '}'
+        '</script>'
+    )
+
     return (
         f'<div class="ep-back">'
         f'<div style="margin-bottom:10px"><span class="rl rn">&#9679; Script &amp; Nuance</span></div>'
-        f'{combined_html}'
+        f'{rows}'
+        f'<div class="main-btn-wrap">'
+        f'<div class="main-btn" onclick="document.getElementById(\'ba1\').play()">'
+        f'<span style="font-size:18px;">&#128266;</span>'
+        f'<span class="main-btn-text">Play all</span>'
+        f'<audio id="ba1" src="{b_fn}"></audio>'
+        f'</div>'
+        f'</div>'
+        f'{toggle_js}'
         f'</div>'
     )
 
@@ -278,7 +319,7 @@ def main():
         return
 
     model = genanki.Model(
-        ANKI_MODEL_ID, "EP_Model_v15",
+        ANKI_MODEL_ID, "EP_Model_v17",
         fields=[{"name": "Front"}, {"name": "Back"}],
         templates=[{"name": "Card 1", "qfmt": "{{Front}}", "afmt": "{{Back}}"}],
         css=CARD_CSS
@@ -297,17 +338,18 @@ def main():
                 speech_lines = get_speech_lines(phrase)
                 content = generate_content(client, speech_lines)
                 meanings = content["meanings"]
+                hints = content.get("hints", [])
 
-                f_fn, s_files, m_files = asyncio.run(
+                f_fn, b_fn, s_files, m_files = asyncio.run(
                     process_audio(speech_lines, meanings, uid, tmpdir)
                 )
-                all_media.extend([str(Path(tmpdir) / f) for f in [f_fn] + s_files + m_files])
+                all_media.extend([str(Path(tmpdir) / f) for f in [f_fn, b_fn] + s_files + m_files])
 
                 deck.add_note(genanki.Note(
                     model=model,
                     fields=[
-                        build_front(f_fn, speech_lines),
-                        build_back(speech_lines, s_files, m_files, meanings)
+                        build_front(f_fn, speech_lines, hints),
+                        build_back(speech_lines, s_files, m_files, meanings, b_fn)
                     ],
                     guid=uid
                 ))
