@@ -134,7 +134,7 @@ Return ONLY valid JSON:
             data["hints"] = hints[:label_count]
             return data
         except Exception as e:
-            if "429" in str(e):
+            if "429" in str(e) or "503" in str(e):
                 time.sleep(25)
                 continue
             raise e
@@ -364,7 +364,7 @@ def main():
 
             except Exception as e:
                 err_s = str(e).lower()
-                status_to_set = STATUS_TIMEOUT if ("429" in err_s or "timeout" in err_s or "deadline" in err_s) else STATUS_ERROR
+                status_to_set = STATUS_TIMEOUT if ("429" in err_s or "503" in err_s or "timeout" in err_s or "deadline" in err_s) else STATUS_ERROR
                 print(f"    ❌ 失敗({status_to_set}): {e}")
                 requests.patch(
                     f"https://api.notion.com/v1/pages/{page_id}",
