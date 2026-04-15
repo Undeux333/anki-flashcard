@@ -1,4 +1,3 @@
-
 #!/usr/bin/env python3
 import os, json, hashlib, asyncio, tempfile, requests, io, re, time
 from pathlib import Path
@@ -40,26 +39,22 @@ CONV_VOICES = {
 CARD_CSS = """
 .card { font-family: sans-serif; background: #f4f6f9; text-align: left; }
 .ep-front, .ep-back { max-width: 550px; margin: auto; padding: 20px; }
-
-/* Front: play button */
-.listen-label { font-size: 14px; color: #2d3748; margin-bottom: 14px; }
-.play-full-btn { display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; font-size: 14px; color: #2d3748; cursor: pointer; width: fit-content; margin-bottom: 22px; }
-
-/* Front: conversation structure */
+.play-btn-wrap { display: flex; justify-content: center; margin-bottom: 28px; }
+.play-full-btn { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 14px 32px; background: #2d3748; border-radius: 12px; cursor: pointer; border: none; }
+.play-full-btn-text { font-size: 15px; font-weight: bold; color: #fff; }
 .conv { display: flex; flex-direction: column; gap: 8px; }
 .conv-row { display: flex; align-items: center; gap: 10px; }
 .conv-speaker { font-size: 12px; font-weight: bold; color: #718096; min-width: 22px; flex-shrink: 0; }
 .conv-bar { height: 38px; border-radius: 8px; background: #edf2f7; border: 1px solid #e2e8f0; flex: 1; }
 .conv-predict { height: 38px; border-radius: 8px; background: #edf2f7; border: 1.5px solid #f6c026; flex: 1; display: flex; align-items: center; padding: 0 12px; gap: 6px; font-size: 12px; color: #718096; font-weight: bold; }
-
-/* Back */
 .sentence-row { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 20px; }
-.splay-wrap { display: flex; flex-direction: column; gap: 5px; flex-shrink: 0; }
-.splay { width: 55px; height: 32px; border-radius: 16px; background: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; border: 1px solid #e2e8f0; font-size: 10px; font-weight: bold; color: #4a5568; }
+.back-speaker { font-size: 12px; font-weight: bold; color: #718096; min-width: 22px; flex-shrink: 0; padding-top: 14px; }
 .sentence-content { flex: 1; min-width: 0; }
-.sentence { font-size: 17px; padding: 12px; background: #fff; border-radius: 8px; color: #2d3748; line-height: 1.5; border: 1px solid #e2e8f0; }
+.sentence { font-size: 17px; padding: 10px 14px; background: #fff; border-radius: 8px; color: #2d3748; line-height: 1.5; border: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .sentence.predict { border: 1.5px solid #f6c026; }
 .sentence b { color: #000; font-weight: bold; border-bottom: 2px solid #cbd5e0; }
+.sentence-text { flex: 1; }
+.speak-btn { font-size: 11px; color: #4a5568; cursor: pointer; font-weight: bold; padding: 4px 8px; background: #f7fafc; border-radius: 12px; flex-shrink: 0; white-space: nowrap; border: 1px solid #e2e8f0; }
 .meaning-box { display: flex; align-items: flex-end; justify-content: space-between; margin-top: 8px; background: #ebf4ff; padding: 10px; border-radius: 8px; border-left: 4px solid #4299e1; }
 .mini-meaning { font-size: 14px; color: #2c5282; line-height: 1.4; flex: 1; }
 .mplay { font-size: 11px; color: #3182ce; cursor: pointer; font-weight: bold; padding: 4px 8px; background: #fff; border-radius: 12px; margin-left: 10px; flex-shrink: 0; white-space: nowrap; border: 1px solid #bee3f8; }
@@ -153,11 +148,12 @@ async def process_audio(speech_lines: list, meanings: list, uid: str, tmpdir: st
         s_files.append(s_fn)
 
         seg = AudioSegment.from_file(io.BytesIO(s_data), format="mp3")
-        trailing = AudioSegment.silent(duration=500) if idx < last_idx else AudioSegment.empty()
+        trailing = AudioSegment.silent(duration=250) if idx < last_idx else AudioSegment.empty()
 
         if line['hidden']:
-            # 非表示行 → 同じ長さの無音に置き換え（会話のリズムを保つ）
-            front_audio += AudioSegment.silent(duration=len(seg)) + trailing
+            # 非表示行 → 最初・最後は無音なし、中間のみ同じ長さの無音でリズムを保つ
+            if idx > 0 and idx < last_idx:
+                front_audio += AudioSegment.silent(duration=len(seg)) + trailing
         else:
             front_audio += seg + trailing
 
@@ -197,9 +193,13 @@ def build_front(f_fn, speech_lines):
     return (
         f'<div class="ep-front">'
         f'[sound:{f_fn}]'
-        f'<div class="listen-label">Listen</div>'
-        f'<div class="play-full-btn" onclick="document.getElementById(\'fa1\').play()">&#9654; Play Full'
-        f'<audio id="fa1" src="{f_fn}"></audio></div>'
+        f'<div class="play-btn-wrap">'
+        f'<div class="play-full-btn" onclick="document.getElementById(\'fa1\').play()">'
+        f'<span style="font-size:18px;">&#128266;</span>'
+        f'<span class="play-full-btn-text">Play conversation</span>'
+        f'<audio id="fa1" src="{f_fn}"></audio>'
+        f'</div>'
+        f'</div>'
         f'<div class="conv">{rows}</div>'
         f'</div>'
     )
@@ -207,17 +207,19 @@ def build_front(f_fn, speech_lines):
 def build_back(speech_lines, s_files, m_files, meanings):
     combined_html = ""
     for idx, line in enumerate(speech_lines):
-        disp = format_script_text(f"{line['speaker']}: {line['text']}")
+        disp = format_script_text(line['text'])
+        sp = line['speaker']
         mt = meanings[idx]
         sentence_class = "sentence predict" if line['hidden'] else "sentence"
         combined_html += (
             f'<div class="sentence-row">'
-            f'<div class="splay-wrap">'
-            f'<div class="splay" onclick="document.getElementById(\'s{idx}\').play()">&#9654; Voice</div>'
+            f'<span class="back-speaker">{sp}:</span>'
+            f'<div class="sentence-content">'
+            f'<div class="{sentence_class}">'
+            f'<span class="sentence-text">{disp}</span>'
+            f'<span class="speak-btn" onclick="document.getElementById(\'s{idx}\').play()">&#128266; Speak</span>'
             f'<audio id="s{idx}" src="{s_files[idx]}"></audio>'
             f'</div>'
-            f'<div class="sentence-content">'
-            f'<div class="{sentence_class}">{disp}</div>'
             f'<div class="meaning-box">'
             f'<div class="mini-meaning"><i>{mt}</i></div>'
             f'<div class="mplay" onclick="document.getElementById(\'m{idx}\').play()">&#128266; Explain</div>'
