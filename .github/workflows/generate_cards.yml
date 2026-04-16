@@ -1,75 +1,93 @@
 name: Generate Anki Cards
-
 on:
+  schedule:
+    - cron: '*/30 * * * *'
   workflow_dispatch:
-
 jobs:
   generate:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write # リリース作成に必要
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
       - name: Install ffmpeg
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
-
+        run: sudo apt-get install -y ffmpeg
       - name: Install dependencies
-        run: |
-          pip install requests google-genai edge-tts genanki pydub
-
+        run: pip install -r requirements.txt
       - name: Generate Anki cards
         id: generate
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          GEMINI_API_KEY:     ${{ secrets.GEMINI_API_KEY }}
+          NOTION_TOKEN:       ${{ secrets.NOTION_TOKEN }}
           NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
         run: |
-          mkdir -p output
           python anki_generator_notion.py
-          # ファイルが生成されたかチェック
           if ls output/*.apkg 1>/dev/null 2>&1; then
             echo "apkg_exists=true" >> $GITHUB_OUTPUT
           else
             echo "apkg_exists=false" >> $GITHUB_OUTPUT
           fi
-
+      - name: Upload .apkg as artifact
+        if: steps.generate.outputs.apkg_exists == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: anki-cards-${{ github.run_number }}
+          path: output/*.apkg
+          if-no-files-found: ignore
+          retention-days: 30
       - name: Upload to GitHub Releases and notify
         if: steps.generate.outputs.apkg_exists == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # secrets.GH_TOKENが未設定ならこれを使用
-          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
-          REPO: ${{ github.repository }}
+          GH_TOKEN:     ${{ secrets.GH_TOKEN }}
+          NTFY_TOPIC:   ${{ secrets.NTFY_TOPIC }}
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          REPO:         ${{ github.repository }}
         run: |
-          TAG="anki-latest"
-          FIXED_NAME="anki_cards.apkg"
+          TIMESTAMP=$(date +"%Y%m%d%H%M")
+          APKG_FILE=$(ls output/anki_cards_*.apkg | head -1)
+          TAG="deck-${TIMESTAMP}"
 
-          # 生成された最新のファイルを取得して固定名にコピー
-          LATEST_FILE=$(ls output/*.apkg | head -1)
-          cp "$LATEST_FILE" "output/${FIXED_NAME}"
-
-          # 既存リリースの削除
-          gh release delete "$TAG" --yes 2>/dev/null || true
-          git tag -d "$TAG" 2>/dev/null || true
-          git push origin :refs/tags/"$TAG" 2>/dev/null || true
-          sleep 5
-
-          # 新規リリース作成
-          gh release create "$TAG" "output/${FIXED_NAME}" \
-            --title "Latest Anki Cards" \
-            --notes "Generated at $(date +'%Y-%m-%d %H:%M:%S')" \
+          # タイムスタンプ付きリリースを新規作成（履歴を保持）
+          gh release create "$TAG" "$APKG_FILE" \
+            --title "Anki Cards ${TIMESTAMP}" \
+            --notes "Auto-generated" \
             --repo "$REPO"
 
-          # 固定ダウンロードURL
-          DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${TAG}/${FIXED_NAME}"
-          
+          FILENAME=$(basename "$APKG_FILE")
+          DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${TAG}/${FILENAME}"
+          echo "Download URL: $DOWNLOAD_URL"
+
+          # done_pages.json が存在すれば Notion に Release URL を記録
+          if [ -f output/done_pages.json ]; then
+            python3 - <<EOF
+import json, requests, os
+
+page_ids = json.load(open("output/done_pages.json"))
+headers = {
+    "Authorization": f"Bearer {os.environ['NOTION_TOKEN']}",
+    "Notion-Version": "2022-06-28",
+    "Content-Type": "application/json"
+}
+download_url = "$DOWNLOAD_URL"
+
+for pid in page_ids:
+    try:
+        requests.patch(
+            f"https://api.notion.com/v1/pages/{pid}",
+            headers=headers,
+            json={"properties": {"Release URL": {"url": download_url}}},
+            timeout=10
+        )
+    except Exception as e:
+        print(f"Notion update failed ({pid}): {e}")
+
+print(f"Updated {len(page_ids)} pages with Release URL")
+EOF
+          fi
+
           # ntfy で通知
           curl -s \
             -H "Title: Anki cards ready" \
