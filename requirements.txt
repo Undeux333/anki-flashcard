@@ -3,3 +3,5 @@ edge-tts
 requests
 genanki
 pydub
+gspread
+google-auth
