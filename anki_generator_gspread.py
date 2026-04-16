@@ -164,7 +164,7 @@ async def process_audio(speech_lines: list, meanings: list, uid: str, tmpdir: st
     for idx, line in enumerate(speech_lines):
         # ()を除去し、@...@で囲まれた部分もTTSから除去
         clean_text = re.sub(r'\(|\)', '', line['text'])
-        clean_text = re.sub(r'@[^@]*@', '', clean_text).strip()
+        clean_text = re.sub(r'\*[^*]*\*', '', clean_text).strip()
         voice = CONV_VOICES.get(line['speaker'], "en-US-BrianNeural")
 
         s_data = await _tts_bytes(clean_text, voice)
@@ -199,7 +199,7 @@ async def process_audio(speech_lines: list, meanings: list, uid: str, tmpdir: st
 def format_script_text(text: str) -> str:
     t = text.replace("<", "&lt;").replace(">", "&gt;")
     t = re.sub(r'\((.*?)\)', r'<b>\1</b>', t)
-    t = re.sub(r'@([^@]*)@', r'<span style="color:#a0aec0;font-size:13px;">[\1]</span>', t)
+    t = re.sub(r'\*([^*]*)\*', r'<span style="color:#a0aec0;font-size:12px;font-style:italic;">[\1]</span>', t)
     return t.replace("\n", "<br>")
 
 def build_front(f_fn, speech_lines, hints):
