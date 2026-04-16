@@ -30,7 +30,7 @@ jobs:
           SPREADSHEET_ID:     ${{ secrets.SPREADSHEET_ID }}
           GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
         run: |
-          python anki_generator_notion.py
+          python anki_generator_gspread.py
           if ls output/*.apkg 1>/dev/null 2>&1; then
             echo "apkg_exists=true" >> $GITHUB_OUTPUT
           else
@@ -63,7 +63,7 @@ jobs:
             --repo "$REPO"
           DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${TAG}/${FILENAME}"
           echo "Download URL: $DOWNLOAD_URL"
-          DOWNLOAD_URL="$DOWNLOAD_URL" python update_notion_release.py
+          DOWNLOAD_URL="$DOWNLOAD_URL" python update_release_gspread.py
           curl -s \
             -H "Title: Anki cards ready" \
             -H "Tags: white_check_mark" \
