@@ -53,7 +53,7 @@ jobs:
           GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
           REPO:               ${{ github.repository }}
         run: |
-          TIMESTAMP=$(date +"%Y%m%d%H%M")
+          TIMESTAMP=$(TZ=Asia/Tokyo date +"%Y%m%d%H%M")
           APKG_FILE=$(ls output/anki_cards_*.apkg | head -1)
           FILENAME=$(basename "$APKG_FILE")
           TAG="deck-${TIMESTAMP}"
