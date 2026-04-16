@@ -17,6 +17,14 @@ jobs:
         run: sudo apt-get install -y ffmpeg
       - name: Install dependencies
         run: pip install -r requirements.txt
+        
+      - name: Debug credentials
+    env:
+      GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+    run: |
+      echo "Length: ${#GOOGLE_CREDENTIALS}"
+      echo "First 20 chars: ${GOOGLE_CREDENTIALS:0:20}"
+        
       - name: Generate Anki cards
         id: generate
         env:
