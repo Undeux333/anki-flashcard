@@ -406,7 +406,8 @@ def main():
 
             # 成功済み行に Generated At を記録
             if done_rows:
-                generated_at = datetime.now().strftime("%Y-%m-%d %H:%M")
+                from zoneinfo import ZoneInfo
+                generated_at = datetime.now(ZoneInfo("Asia/Tokyo")).strftime("%Y-%m-%d %H:%M")
                 for row in done_rows:
                     try:
                         update_generated_at(sheet, row, generated_at)
