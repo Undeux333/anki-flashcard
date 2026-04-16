@@ -147,13 +147,25 @@ Return ONLY valid JSON:
                 continue
             raise e
 
-async def _tts_bytes(text, voice):
-    communicate = edge_tts.Communicate(text, voice=voice, rate=TTS_RATE)
-    data = b""
-    async for chunk in communicate.stream():
-        if chunk["type"] == "audio":
-            data += chunk["data"]
-    return data
+async def _tts_bytes(text, voice, retries=3):
+    import asyncio as _asyncio
+    last_err = None
+    for attempt in range(retries):
+        try:
+            communicate = edge_tts.Communicate(text, voice=voice, rate=TTS_RATE)
+            data = b""
+            async for chunk in communicate.stream():
+                if chunk["type"] == "audio":
+                    data += chunk["data"]
+            if not data:
+                raise RuntimeError("No audio was received.")
+            return data
+        except Exception as e:
+            last_err = e
+            if attempt < retries - 1:
+                print(f"    ⚠️  TTS失敗({attempt+1}/{retries}): {e} — リトライ中...")
+                await _asyncio.sleep(3)
+    raise last_err
 
 async def process_audio(speech_lines: list, meanings: list, uid: str, tmpdir: str):
     s_files, m_files = [], []
