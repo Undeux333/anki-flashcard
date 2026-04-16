@@ -17,20 +17,18 @@ jobs:
         run: sudo apt-get install -y ffmpeg
       - name: Install dependencies
         run: pip install -r requirements.txt
-        
       - name: Debug credentials
-    env:
-      GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
-    run: |
-      echo "Length: ${#GOOGLE_CREDENTIALS}"
-      echo "First 20 chars: ${GOOGLE_CREDENTIALS:0:20}"
-        
+        env:
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+        run: |
+          echo "Length: ${#GOOGLE_CREDENTIALS}"
+          echo "First 20 chars: ${GOOGLE_CREDENTIALS:0:20}"
       - name: Generate Anki cards
         id: generate
         env:
           GEMINI_API_KEY:     ${{ secrets.GEMINI_API_KEY }}
-          NOTION_TOKEN:       ${{ secrets.NOTION_TOKEN }}
-          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+          SPREADSHEET_ID:     ${{ secrets.SPREADSHEET_ID }}
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
         run: |
           python anki_generator_notion.py
           if ls output/*.apkg 1>/dev/null 2>&1; then
@@ -49,28 +47,23 @@ jobs:
       - name: Upload to GitHub Releases and notify
         if: steps.generate.outputs.apkg_exists == 'true'
         env:
-          GH_TOKEN:     ${{ secrets.GH_TOKEN }}
-          NTFY_TOPIC:   ${{ secrets.NTFY_TOPIC }}
-          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
-          REPO:         ${{ github.repository }}
+          GH_TOKEN:           ${{ secrets.GH_TOKEN }}
+          NTFY_TOPIC:         ${{ secrets.NTFY_TOPIC }}
+          SPREADSHEET_ID:     ${{ secrets.SPREADSHEET_ID }}
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+          REPO:               ${{ github.repository }}
         run: |
           TIMESTAMP=$(date +"%Y%m%d%H%M")
           APKG_FILE=$(ls output/anki_cards_*.apkg | head -1)
+          FILENAME=$(basename "$APKG_FILE")
           TAG="deck-${TIMESTAMP}"
-
-          # タイムスタンプ付きリリースを新規作成（履歴を保持）
           gh release create "$TAG" "$APKG_FILE" \
             --title "Anki Cards ${TIMESTAMP}" \
             --notes "Auto-generated" \
             --repo "$REPO"
-
-          FILENAME=$(basename "$APKG_FILE")
           DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${TAG}/${FILENAME}"
           echo "Download URL: $DOWNLOAD_URL"
-
           DOWNLOAD_URL="$DOWNLOAD_URL" python update_notion_release.py
-
-          # ntfy で通知
           curl -s \
             -H "Title: Anki cards ready" \
             -H "Tags: white_check_mark" \
