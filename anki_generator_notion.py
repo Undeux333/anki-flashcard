@@ -6,32 +6,36 @@ from google import genai
 from google.genai import types
 import edge_tts
 import genanki
+import gspread
+from google.oauth2.service_account import Credentials
 from pydub import AudioSegment
 
 # ═══════════════════════════════════════════════
 #   設定・環境変数
 # ═══════════════════════════════════════════════
-GEMINI_API_KEY     = os.environ.get("GEMINI_API_KEY", "")
-NOTION_TOKEN       = os.environ.get("NOTION_TOKEN", "")
-NOTION_DATABASE_ID = os.environ.get("NOTION_DATABASE_ID", "")
-GEMINI_MODEL       = "gemini-3.1-flash-lite-preview"
-TTS_RATE           = "+0%"
-NOTION_VERSION     = "2022-06-28"
+GEMINI_API_KEY   = os.environ.get("GEMINI_API_KEY", "")
+SPREADSHEET_ID   = os.environ.get("SPREADSHEET_ID", "")
+GOOGLE_CREDS_JSON = os.environ.get("GOOGLE_CREDENTIALS", "")
+GEMINI_MODEL     = "gemini-3.1-flash-lite-preview"
+TTS_RATE         = "+0%"
 
-PROP_PHRASE        = "Phrase"
-PROP_STATUS        = "Status"
-PROP_GENERATED_AT  = "Generated At"
-PROP_RELEASE_URL   = "Release URL"
+# スプレッドシート列定義（1始まり）
+COL_INDEX        = 1  # A
+COL_STATUS       = 2  # B
+COL_PHRASE       = 3  # C
+COL_LEVEL        = 4  # D（読み取りのみ）
+COL_REMARKS      = 5  # E（読み取りのみ）
+COL_RELEASE_URL  = 6  # F
+COL_GENERATED_AT = 7  # G
 
 STATUS_READY   = "Ready"
 STATUS_DONE    = "Done"
 STATUS_ERROR   = "Error"
 STATUS_TIMEOUT = "Timeout"
-STATUS_PENDING = "Pending"
 
 ANKI_MODEL_ID = 1607392333
 ANKI_DECK_ID  = 2059400110
-FORCE_REGEN = os.environ.get("FORCE_REGEN", "false").lower() == "true"
+FORCE_REGEN   = os.environ.get("FORCE_REGEN", "false").lower() == "true"
 
 CONV_VOICES = {
     "A": "en-US-BrianNeural",
@@ -290,6 +294,36 @@ def build_back(speech_lines, s_files, m_files, meanings, b_fn):
     )
 
 # ═══════════════════════════════════════════════
+#   Google Sheets
+# ═══════════════════════════════════════════════
+def get_sheet():
+    creds_info = json.loads(GOOGLE_CREDS_JSON)
+    scopes = ["https://www.googleapis.com/auth/spreadsheets"]
+    creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
+    gc = gspread.authorize(creds)
+    return gc.open_by_key(SPREADSHEET_ID).sheet1
+
+def get_pending_phrases(sheet):
+    rows = sheet.get_all_values()
+    pending = []
+    for i, row in enumerate(rows[1:], start=2):  # ヘッダーをスキップ、行番号は2始まり
+        if len(row) < COL_STATUS:
+            continue
+        status = row[COL_STATUS - 1].strip()
+        phrase = row[COL_PHRASE - 1].strip() if len(row) >= COL_PHRASE else ""
+        if not phrase:
+            continue
+        if FORCE_REGEN or status in (STATUS_READY, STATUS_TIMEOUT):
+            pending.append({"phrase": phrase, "row": i})
+    return pending
+
+def update_status(sheet, row: int, status: str):
+    sheet.update_cell(row, COL_STATUS, status)
+
+def update_generated_at(sheet, row: int, generated_at: str):
+    sheet.update_cell(row, COL_GENERATED_AT, generated_at)
+
+# ═══════════════════════════════════════════════
 #   Main
 # ═══════════════════════════════════════════════
 def main():
@@ -298,38 +332,19 @@ def main():
     output_path.mkdir(parents=True, exist_ok=True)
     client = genai.Client(api_key=GEMINI_API_KEY)
 
-    url = f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}/query"
-    filter_payload = {
-        "filter": {
-            "or": [
-                {"property": PROP_STATUS, "select": {"equals": STATUS_READY}},
-                {"property": PROP_STATUS, "select": {"equals": STATUS_TIMEOUT}}
-            ]
-        }
-    }
-    if FORCE_REGEN:
-        filter_payload = {}
-
-    res = requests.post(
-        url,
-        headers={"Authorization": f"Bearer {NOTION_TOKEN}", "Notion-Version": NOTION_VERSION, "Content-Type": "application/json"},
-        json=filter_payload,
-        timeout=15
-    )
-    res.raise_for_status()
-
-    pending = []
-    for page in res.json().get("results", []):
-        try:
-            phrase = page["properties"][PROP_PHRASE]["title"][0]["text"]["content"].strip()
-            if phrase:
-                pending.append({"phrase": phrase, "page_id": page["id"]})
-        except:
-            continue
+    print("📋 スプレッドシートから未処理フレーズを取得中...")
+    try:
+        sheet = get_sheet()
+        pending = get_pending_phrases(sheet)
+    except Exception as e:
+        print(f"❌ スプレッドシート接続エラー: {e}")
+        return
 
     if not pending:
         print("処理対象のデータ（Ready または Timeout）が見つかりませんでした。")
         return
+
+    print(f"   {len(pending)} 件見つかりました\n")
 
     model = genanki.Model(
         ANKI_MODEL_ID, "EP_Model_v18",
@@ -339,11 +354,11 @@ def main():
     )
     deck = genanki.Deck(ANKI_DECK_ID, "English Phrases (Auto)")
     all_media = []
-    done_page_ids = []  # リリースURL記録用
+    done_rows = []  # リリースURL記録用
 
     with tempfile.TemporaryDirectory() as tmpdir:
         for i, item in enumerate(pending, 1):
-            phrase, page_id = item["phrase"], item["page_id"]
+            phrase, row = item["phrase"], item["row"]
             print(f"[{i}/{len(pending)}] {phrase[:50]}...")
             uid = hashlib.md5(phrase.encode()).hexdigest()[:10]
             try:
@@ -368,25 +383,18 @@ def main():
                     guid=uid
                 ))
 
-                requests.patch(
-                    f"https://api.notion.com/v1/pages/{page_id}",
-                    headers={"Authorization": f"Bearer {NOTION_TOKEN}", "Notion-Version": NOTION_VERSION, "Content-Type": "application/json"},
-                    json={"properties": {PROP_STATUS: {"select": {"name": STATUS_DONE}}}},
-                    timeout=10
-                )
-                done_page_ids.append(page_id)
+                update_status(sheet, row, STATUS_DONE)
+                done_rows.append(row)
                 print("    ✅ 成功")
 
             except Exception as e:
                 err_s = str(e).lower()
                 status_to_set = STATUS_TIMEOUT if ("429" in err_s or "503" in err_s or "timeout" in err_s or "deadline" in err_s) else STATUS_ERROR
                 print(f"    ❌ 失敗({status_to_set}): {e}")
-                requests.patch(
-                    f"https://api.notion.com/v1/pages/{page_id}",
-                    headers={"Authorization": f"Bearer {NOTION_TOKEN}", "Notion-Version": NOTION_VERSION, "Content-Type": "application/json"},
-                    json={"properties": {PROP_STATUS: {"select": {"name": status_to_set}}}},
-                    timeout=10
-                )
+                try:
+                    update_status(sheet, row, status_to_set)
+                except Exception as se:
+                    print(f"    ⚠️  ステータス更新失敗: {se}")
 
         if all_media:
             timestamp = datetime.now().strftime("%Y%m%d%H%M")
@@ -396,23 +404,18 @@ def main():
             pkg.write_to_file(str(final_name))
             print(f"📦 生成完了: {final_name}")
 
-            # 成功済みページに Generated At を記録
-            if done_page_ids:
-                generated_at = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
-                for page_id in done_page_ids:
+            # 成功済み行に Generated At を記録
+            if done_rows:
+                generated_at = datetime.now().strftime("%Y-%m-%d %H:%M")
+                for row in done_rows:
                     try:
-                        requests.patch(
-                            f"https://api.notion.com/v1/pages/{page_id}",
-                            headers={"Authorization": f"Bearer {NOTION_TOKEN}", "Notion-Version": NOTION_VERSION, "Content-Type": "application/json"},
-                            json={"properties": {PROP_GENERATED_AT: {"date": {"start": generated_at}}}},
-                            timeout=10
-                        )
+                        update_generated_at(sheet, row, generated_at)
                     except Exception as e:
-                        print(f"⚠️  Notion Generated At 更新失敗 ({page_id}): {e}")
+                        print(f"⚠️  Generated At 更新失敗 (row {row}): {e}")
 
-                # ワークフローが Release URL を記録するためにページIDを保存
+                # ワークフローが Release URL を記録するために行番号を保存
                 done_pages_path = output_path / "done_pages.json"
-                done_pages_path.write_text(json.dumps(done_page_ids))
+                done_pages_path.write_text(json.dumps(done_rows))
 
 if __name__ == "__main__":
     main()
