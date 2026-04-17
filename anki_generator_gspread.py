@@ -73,7 +73,7 @@ audio { display: none; }
 .rn { background: #e8f4fd; color: #1d6fa4; }
 .bubble-wrap { display: inline-flex; flex-direction: column; align-items: flex-start; flex: 1; }
 .ipa-wrap { display: flex; justify-content: flex-end; margin-top: 4px; }
-.ipa-row { display: inline-block; padding: 5px 10px; background: #fff; border: 0.5px solid #e2e8f0; border-radius: 8px; font-size: 15px; line-height: 1.9; letter-spacing: 0.2px; color: #2d3748; font-family: serif; }
+.ipa-row { display: inline-block; padding: 5px 10px; background: #fff; border: 0.5px solid #e2e8f0; border-radius: 8px; font-size: 18px; line-height: 1.9; letter-spacing: 0.2px; color: #2d3748; font-family: serif; }
 .ipa-row.predict { border: 1.5px solid #f6c026; }
 """
 
@@ -142,13 +142,14 @@ One explanation per phrase, in the same order.
 {hint_instruction}
 
 Also generate IPA transcription for each phrase as it would be naturally spoken by a native American English speaker.
-Apply reduction, linking, and assimilation rules:
-- Connected sounds: write them together without spaces (e.g. "did you" → "dɪdʒu", "find that" → "faɪndðə")
-- Reduced sounds (weak/unstressed): wrap with * (e.g. *aɪ*, *ðə*)
-- Normal/strong sounds: no marker
-- Add a space after , and . and around -
-- Do NOT use ˈ stress markers
-- Do NOT show elision — simply omit the dropped sound
+STRICT IPA RULES — follow exactly:
+1. Connected sounds: write without ANY spaces between them (e.g. "did you" → dɪdʒu, "find that file" → faɪndðəfaɪl)
+2. Reduced/weak sounds: wrap with * on both sides (e.g. function words like "I", "a", "the", "to", "of", "and", "it", "in" are almost always reduced → *aɪ*, *ə*, *ðə*)
+3. Strong/content sounds (nouns, verbs, adjectives, adverbs): NO markers
+4. Punctuation: add a space after , and . — keep ? and ! attached to last word — add spaces around -
+5. Do NOT use ˈ stress markers
+6. Do NOT show elision — simply omit the dropped sound
+7. CRITICAL: Do NOT insert spaces between words unless there is a punctuation mark — connected speech has NO word boundaries
 
 Input:
 {input_text}
