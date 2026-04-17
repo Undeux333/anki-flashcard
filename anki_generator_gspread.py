@@ -301,17 +301,17 @@ def apply_ipa_rules(text: str) -> str:
     """ルールベースのIPA後処理"""
     # 英国英語母音 → 米国英語
     text = text.replace('ɒ', 'ɑ')
-    # -ɪŋ → -ɪn（g脱落）
-    text = re.sub(r'ɪŋ', 'ɪn', text)
     # yeah: jæ → jə
-    text = re.sub(r'\bjæ\b', 'jə', text)
-    # but: bʌt → bət（後続文字を問わず）
+    text = re.sub(r'jæ(?=[,\.\?\!\s]|$)', 'jə', text)
+    # but: bʌt → bət
     text = re.sub(r'bʌt', 'bət', text)
-    # フラッピング: 母音・共鳴音に挟まれたt/d → ɾ
+    # フラッピング: 母音に挟まれたt → ɾ（ts, tr除外）
     vowels = 'aeiouæɑɛɪɔʊəɾʌ'
     sonorants = 'mnŋlr'
-    surrounding = f'[{vowels}{sonorants}]'
-    text = re.sub(f'(?<={surrounding})[td](?={surrounding})', 'ɾ', text)
+    # t のフラッピング（後ろが母音のみ、s,r,n,m,ŋ,l は除外）
+    text = re.sub(f'(?<=[{vowels}{sonorants}])t(?=[{vowels}])', 'ɾ', text)
+    # d のフラッピング（前が母音、後ろが母音の場合のみ）
+    text = re.sub(f'(?<=[{vowels}])d(?=[{vowels}])', 'ɾ', text)
     return text
 
 
