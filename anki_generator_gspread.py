@@ -170,6 +170,7 @@ Return ONLY valid JSON:
                 config=types.GenerateContentConfig(response_mime_type="application/json", temperature=0.2)
             )
             data = json.loads(response.text.strip())
+            print(f"  DEBUG Gemini response: {response.text[:500]}")
             lines = data.get("lines", [])
             while len(lines) < label_count:
                 lines.append({"meaning": "(Check original text for nuance)", "hint": None, "ipa": ""})
