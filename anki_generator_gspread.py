@@ -148,6 +148,11 @@ PHONETIC CONCEPTS (apply naturally, not mechanically):
 - Sounds may weaken, change, or disappear in fast speech
 - Consonants between vowels often become softer or tap-like
 - Frequent words are often reduced
+REDUCTION HEURISTICS (apply automatically):
+- If a consonant (especially t/d) is between vowels or near weak vowels, soften or tap it
+- If a syllable is unstressed, reduce or shorten its vowel
+- If a consonant cluster is hard to pronounce quickly, simplify it
+- If a word has multiple syllables, reduce internal vowels when possible
 IMPORTANT:
 Prioritize natural spoken flow over dictionary pronunciation.
 ANCHOR EXAMPLES (guide behavior, do not rigidly copy):
