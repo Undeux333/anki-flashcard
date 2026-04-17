@@ -142,48 +142,57 @@ Explain how this phrase is used in everyday conversation by native speakers by b
 Generate IPA for natural fast American English conversational speech.
 
 CORE PRINCIPLE:
-Always choose the more reduced, connected form over the careful/dictionary form.
-When in doubt, reduce more.
+Represent how a native speaker actually says it in casual conversation.
+Always choose the MORE reduced, connected form. Never use dictionary pronunciation.
 
-PHONOLOGICAL RULES (apply to all words):
+MANDATORY RULES:
 
-[Flapping]
-Any /t/ or /d/ between vowels or sonorants → ɾ
-Apply ACROSS word boundaries, not just within words.
+1. FLAPPING (ɾ): Any /t/ or /d/ surrounded by vowels or sonorants → ɾ
+   Applies ACROSS word boundaries without exception.
+   Pattern: [vowel/sonorant] + t/d + [vowel/sonorant] → ɾ
 
-[Vowel reduction]
-All unstressed vowels → ə (schwa) unless they carry meaning-critical stress.
-Short function words (articles, prepositions, conjunctions, auxiliaries, pronouns) are almost always reduced.
+2. VOWEL REDUCTION: All unstressed function words → weakest form (schwa or dropped)
+   Pattern: short grammatical words in unstressed position → ə or weaker
 
-[Final consonant behavior]
-Word-final /t/ before a pause or consonant: weaken or omit.
-Word-final /g/ in -ing suffix: omit.
-Syllable-final /n/ before consonant: may become syllabic (n̩).
+3. SYLLABIC CONSONANTS: Unstressed syllable ending in nasal after consonant → syllabic
+   Pattern: [consonant] + [unstressed vowel] + n/m → n̩/m̩
 
-[Linking]
-Consonant-final word + vowel-initial word: merge without boundary.
-Palatalization: t/d + j → tʃ/dʒ across boundaries.
+4. ELISION: Drop sounds that disappear in fast speech
+   Pattern: final -g in -ing suffix → always drop
+   Pattern: unstressed /t/ /d/ in consonant clusters → drop
 
-[Elision]
-Unstressed /t/ and /d/ in consonant clusters: omit.
-Schwa in unstressed syllables of rapid speech: may be omitted entirely.
+5. LINKING: No word boundaries in connected speech
+   Pattern: consonant-final + vowel-initial → merge
+   Pattern: t/d + j across boundary → tʃ/dʒ
+
+ANCHOR EXAMPLES (illustrate rule application, not word lists):
+- about taking → baʊɾeɪkɪn  [flap across boundary + g-drop]
+- did you → dɪdʒu  [palatalization]
+- could you → kədʒu  [reduction + palatalization]
+- get it → ɡɛɾɪt  [flap]
+- that'll → ðæɾəl  [flap across boundary]
+- yeah → jə  [function word reduction]
+- but → bət  [function word reduction]
+- decision → dɪsɪʒn̩  [syllabic n]
+- going to → ɡənə  [reduction]
+- want to → wɑnə  [reduction]
 
 RHYTHM GROUPING:
-Group words into natural spoken chunks separated by spaces.
-A chunk is a sequence of words spoken without a breath or pause.
-Longer sentences will have 2-4 chunks.
-Within each chunk: no spaces.
-Between chunks: one space.
+Split long phrases into natural breath groups separated by a single space.
+Within a group: no spaces. Between groups: one space.
 
 FORMAT:
 - Space after , and .
 - No space before ? or !
-- Use ' before the syllable carrying primary stress (only when essential for meaning)
-- No ˈ (IPA stress mark)
-- No * or any annotation
+- Use ' for primary stress only when critical for meaning
+- No ˈ, no *, no annotations
 
-FINAL CHECK:
-Read the output aloud mentally. If it sounds like careful or slow speech, reduce further.
+SELF-CHECK (apply before output):
+- Every t/d between vowels/sonorants → ɾ including across word boundaries?
+- All unstressed function words fully reduced?
+- All -ing endings dropping the g?
+- Long phrases split into rhythm groups?
+- Sounds like fast casual speech, not careful reading?
 
 CRITICAL RULE:
 The input has exactly {label_count} labeled phrases.
@@ -521,7 +530,8 @@ def main():
                     print(f"    ⚠️  ステータス更新失敗: {se}")
 
         if all_media:
-            timestamp = datetime.now().strftime("%Y%m%d%H%M")
+            from zoneinfo import ZoneInfo
+            timestamp = datetime.now(ZoneInfo("Asia/Tokyo")).strftime("%Y%m%d%H%M")
             final_name = output_path / f"anki_cards_{timestamp}.apkg"
             pkg = genanki.Package(deck)
             pkg.media_files = all_media
