@@ -61,6 +61,7 @@ audio { display: none; }
 .bubble { flex: 1; background: #fff; border: 0.5px solid #e2e8f0; border-radius: 10px; padding: 10px 14px; font-size: 15px; line-height: 1.5; color: #2d3748; }
 .bubble.predict { border: 1.5px solid #f6c026; }
 .bubble b { color: #000; font-weight: bold; }
+.bubble u { text-decoration: underline; text-underline-offset: 4px; }
 .action-row { display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin-top: 5px; }
 .explain-btn { font-size: 11px; color: #2b6cb0; cursor: pointer; font-weight: bold; padding: 4px 9px; border-radius: 10px; white-space: nowrap; border: 1px solid #bee3f8; background: #ebf4ff; }
 .script-icon-btn { font-size: 14px; cursor: pointer; padding: 3px 7px; border-radius: 8px; border: 1px solid #bee3f8; background: #ebf4ff; line-height: 1.4; }
