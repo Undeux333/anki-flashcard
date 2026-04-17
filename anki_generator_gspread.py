@@ -184,7 +184,7 @@ Return ONLY valid JSON:
                 time.sleep(25)
                 continue
             raise e
-    raise RuntimeError("generate_content failed after all retries")
+    raise RuntimeError("503 generate_content failed after all retries")
 
 async def _tts_bytes(text, voice, retries=3):
     import asyncio as _asyncio
