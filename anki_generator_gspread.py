@@ -184,6 +184,7 @@ Return ONLY valid JSON:
                 time.sleep(25)
                 continue
             raise e
+    raise RuntimeError("generate_content failed after all retries")
 
 async def _tts_bytes(text, voice, retries=3):
     import asyncio as _asyncio
@@ -447,8 +448,8 @@ def main():
                 speech_lines = get_speech_lines(phrase)
                 content = generate_content(client, speech_lines)
                 meanings = content["meanings"]
-                hints = content.get("hints", [])
-                ipa_list = content.get("ipa", [])
+                hints    = content["hints"]
+                ipa_list = content["ipa"]
 
                 f_fn, b_fn, s_files, m_files = asyncio.run(
                     process_audio(speech_lines, meanings, uid, tmpdir)
