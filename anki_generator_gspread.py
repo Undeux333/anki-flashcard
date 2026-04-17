@@ -142,22 +142,11 @@ Explain how this phrase is used in everyday conversation by native speakers by b
 Also generate IPA transcription for each phrase as it would be naturally spoken by a native American English speaker.
 STRICT IPA RULES — follow exactly:
 1. Connected sounds: write without ANY spaces between them (e.g. "did you" → dɪdʒu, "find that file" → faɪndðəfaɪl)
-2. Reduced/weak sounds: wrap with * on both sides.
-   ONLY these word types are typically reduced in natural American English:
-   - Personal pronouns when unstressed: I→*aɪ*, you→*jə*, he→*i*, she→*ʃi*, we→*wi*, they→*ðeɪ*
-   - Articles: a→*ə*, the→*ðə*
-   - Prepositions: of→*əv*, to→*tə*, at→*ət*, for→*fər*, from→*frəm*
-   - Auxiliaries: am→*əm*, are→*ər*, is→*s/z*, have→*həv*, has→*həz*, had→*həd*, will→*l*, would→*d*, can→*kən*, do→*də*
-   - Conjunctions: and→*ən*, or→*ər*, but→*bət*
-   - Relative/question words when unstressed: that→*ðət*
-   Content words (nouns, main verbs, adjectives, adverbs) are NEVER reduced — do NOT wrap them with *.
-   WRONG example: aɪm*stɪl*ɑnðəfɛns (still is an adverb = content word, never reduced)
-   RIGHT example: *aɪm*stɪlɑnðəfɛns (I'm is reduced, still is not)
-3. Strong sounds: NO markers
-4. Punctuation: add a space after , and . — keep ? and ! attached to last word — add spaces around -
-5. Do NOT use ˈ stress markers
-6. Do NOT show elision — simply omit the dropped sound
-7. CRITICAL: Do NOT insert spaces between words unless there is a punctuation mark
+2. Punctuation: add a space after , and . — keep ? and ! attached to last word — add spaces around -
+3. Do NOT use ˈ stress markers
+4. Do NOT show elision — simply omit the dropped sound
+5. CRITICAL: Do NOT insert spaces between words unless there is a punctuation mark
+6. Do NOT use any * markers
 
 CRITICAL RULE:
 The input has exactly {label_count} labeled phrases.
@@ -266,6 +255,8 @@ def format_ipa(ipa_text: str) -> str:
         return ""
     # *...* マークを除去
     text = re.sub(r'\*([^*]*)\*', r'\1', ipa_text)
+    # 残った単独の * を除去
+    text = text.replace('*', '')
     # ˈ を除去
     text = text.replace('ˈ', '')
     # まず全スペースを削除
