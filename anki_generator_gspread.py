@@ -178,6 +178,7 @@ async def process_audio(speech_lines: list, meanings: list, uid: str, tmpdir: st
         # ()を除去し、@...@で囲まれた部分もTTSから除去
         clean_text = re.sub(r'\(|\)', '', line['text'])
         clean_text = re.sub(r'\+\+[^+]*\+\+', '', clean_text).strip()
+        clean_text = re.sub(r'_([^_]+)_', r'\1', clean_text).strip()
         voice = CONV_VOICES.get(line['speaker'], "en-US-BrianNeural")
 
         s_data = await _tts_bytes(clean_text, voice)
@@ -298,7 +299,7 @@ def build_back(speech_lines, s_files, m_files, meanings, b_fn):
 
     return (
         f'<div class="ep-back">'
-        f'<div style="margin-bottom:10px"><span class="rl rn">&#9679; Script &amp; Nuance</span></div>'
+        f'<div style="margin-bottom:10px"><span class="rl rn">&#9679; Script &amp; Explain</span></div>'
         f'{rows}'
         f'<div class="main-btn-wrap">'
         f'<div class="main-btn" onclick="document.getElementById(\'ba1\').play()">'
