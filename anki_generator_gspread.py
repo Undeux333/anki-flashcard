@@ -164,6 +164,7 @@ REDUCTION HEURISTICS:
 - Simplify difficult consonant clusters
 - Shorten or compress multi-syllable words
 - Prefer smoother, faster pronunciation over careful articulation
+- When identical or similar consonants meet across words, merge or soften them
 
 ANCHOR EXAMPLES (guide behavior, minimal set):
 - did you → dɪdʒu
