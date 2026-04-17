@@ -102,6 +102,58 @@ def get_speech_lines(phrase):
             lines.append({"speaker": current_speaker, "text": p, "hidden": current_hidden})
     return lines
 
+def generate_ipa_two_step(client, text: str) -> str:
+    """
+    2段階IPA生成：
+    Step1: 正式スペリング → カジュアルスペリング
+    Step2: カジュアルスペリング → IPA
+    """
+    # Step 1: カジュアルスペリング変換
+    step1_prompt = f"""Rewrite this sentence exactly as a native American speaker would say it in fast casual speech.
+Use informal spelling to reflect actual pronunciation.
+Apply contractions, reductions, linking, flapping, and elision naturally.
+Output ONLY the rewritten sentence, nothing else. No explanation.
+
+Examples:
+- "Yeah, I get it." → "Yuh, I geddit."
+- "It's a big decision." → "Its uh big decision."
+- "Could you send it over when you get a chance?" → "Kujuh sendit over wenyuh geduh chance?"
+- "That'll wear you out." → "Thaddull wear yuh out."
+
+Input: {text}
+Output:"""
+
+    try:
+        r1 = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=step1_prompt,
+            config=types.GenerateContentConfig(temperature=0.1)
+        )
+        casual = r1.text.strip()
+    except Exception:
+        casual = text
+
+    # Step 2: カジュアルスペリング → IPA
+    step2_prompt = f"""Convert this casual English spelling directly to IPA.
+Apply letter-to-sound rules strictly based on the spelling provided.
+No spaces between sounds unless punctuation exists.
+Space after , and . — No space before ? or !
+No stress markers, no annotations.
+
+Input: {casual}
+Output (IPA only):"""
+
+    try:
+        r2 = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=step2_prompt,
+            config=types.GenerateContentConfig(temperature=0.1)
+        )
+        return r2.text.strip()
+    except Exception:
+        return ""
+
+
 def generate_content(client, speech_lines: list) -> dict:
     label_count = len(speech_lines)
 
@@ -139,63 +191,6 @@ Explain how this phrase is used in everyday conversation by native speakers by b
 
 {hint_instruction}
 
-Generate IPA for natural fast American English conversational speech.
-
-CORE PRINCIPLE:
-Represent how a native speaker actually says it in casual conversation.
-Always choose the MORE reduced, connected form. Never use dictionary pronunciation.
-
-MANDATORY RULES:
-
-1. FLAPPING (ɾ): Any /t/ or /d/ surrounded by vowels or sonorants → ɾ
-   Applies ACROSS word boundaries without exception.
-   Pattern: [vowel/sonorant] + t/d + [vowel/sonorant] → ɾ
-
-2. VOWEL REDUCTION: All unstressed function words → weakest form (schwa or dropped)
-   Pattern: short grammatical words in unstressed position → ə or weaker
-
-3. SYLLABIC CONSONANTS: Unstressed syllable ending in nasal after consonant → syllabic
-   Pattern: [consonant] + [unstressed vowel] + n/m → n̩/m̩
-
-4. ELISION: Drop sounds that disappear in fast speech
-   Pattern: final -g in -ing suffix → always drop
-   Pattern: unstressed /t/ /d/ in consonant clusters → drop
-
-5. LINKING: No word boundaries in connected speech
-   Pattern: consonant-final + vowel-initial → merge
-   Pattern: t/d + j across boundary → tʃ/dʒ
-
-ANCHOR EXAMPLES (illustrate rule application, not word lists):
-- about taking → baʊɾeɪkɪn  [flap across boundary + g-drop]
-- did you → dɪdʒu  [palatalization]
-- could you → kədʒu  [reduction + palatalization]
-- get it → ɡɛɾɪt  [flap]
-- that'll → ðæɾəl  [flap across boundary]
-- yeah → jə  [function word reduction]
-- but → bət  [function word reduction]
-- decision → dɪsɪʒn̩  [syllabic n]
-- going to → ɡənə  [reduction]
-- want to → wɑnə  [reduction]
-
-RHYTHM GROUPING:
-Split long phrases into natural breath groups separated by a single space.
-Within a group: no spaces. Between groups: one space.
-
-FORMAT:
-- CRITICAL: Keep ALL punctuation from the original (. , ? !) — never drop them
-- Space after , and .
-- No space before ? or !
-- Use ' for primary stress only when critical for meaning
-- No ˈ, no *, no annotations
-
-SELF-CHECK (apply before output):
-- Every t/d between vowels/sonorants → ɾ including across word boundaries?
-- All unstressed function words fully reduced?
-- All -ing endings dropping the g?
-- Long phrases split into rhythm groups?
-- ALL punctuation from original preserved?
-- Sounds like fast casual speech, not careful reading?
-
 CRITICAL RULE:
 The input has exactly {label_count} labeled phrases.
 Return exactly {label_count} objects in the "lines" array, one per phrase, in the exact same order as the input.
@@ -206,7 +201,7 @@ Input:
 Return ONLY valid JSON:
 {{
   "lines": [
-    {{"meaning": "explanation", "hint": null, "ipa": "IPA string"}},
+    {{"meaning": "explanation", "hint": null}},
     ...
   ]
 }}"""
@@ -221,12 +216,20 @@ Return ONLY valid JSON:
             data = json.loads(response.text.strip())
             lines = data.get("lines", [])
             while len(lines) < label_count:
-                lines.append({"meaning": "(Check original text for nuance)", "hint": None, "ipa": ""})
+                lines.append({"meaning": "(Check original text for nuance)", "hint": None})
             lines = lines[:label_count]
+
+            # 2段階IPAを各行に対して生成
+            ipa_list = []
+            for l, line in zip(lines, speech_lines):
+                clean = clean_for_gemini(line['text'])
+                ipa = generate_ipa_two_step(client, clean)
+                ipa_list.append(ipa)
+
             return {
                 "meanings": [l.get("meaning", "") for l in lines],
                 "hints":    [l.get("hint", None)  for l in lines],
-                "ipa":      [l.get("ipa", "")      for l in lines],
+                "ipa":      ipa_list,
             }
         except Exception as e:
             if "429" in str(e) or "503" in str(e):
