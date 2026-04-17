@@ -143,7 +143,17 @@ Explain how this phrase is used in everyday conversation by native speakers by b
 Also generate IPA transcription for each phrase as it would be naturally spoken by a native American English speaker.
 STRICT IPA RULES — follow exactly:
 1. Connected sounds: write without ANY spaces between them (e.g. "did you" → dɪdʒu, "find that file" → faɪndðəfaɪl)
-2. Reduced/weak sounds: wrap with * on both sides. Use your judgment based on natural American English pronunciation — function words are often reduced (e.g. *aɪ*, *ðə*, *tə*, *əv*, *ən*) but content words can also be reduced in fast speech. Do not apply fixed rules.
+2. Reduced/weak sounds: wrap with * on both sides.
+   ONLY these word types are typically reduced in natural American English:
+   - Personal pronouns when unstressed: I→*aɪ*, you→*jə*, he→*i*, she→*ʃi*, we→*wi*, they→*ðeɪ*
+   - Articles: a→*ə*, the→*ðə*
+   - Prepositions: of→*əv*, to→*tə*, at→*ət*, for→*fər*, from→*frəm*
+   - Auxiliaries: am→*əm*, are→*ər*, is→*s/z*, have→*həv*, has→*həz*, had→*həd*, will→*l*, would→*d*, can→*kən*, do→*də*
+   - Conjunctions: and→*ən*, or→*ər*, but→*bət*
+   - Relative/question words when unstressed: that→*ðət*
+   Content words (nouns, main verbs, adjectives, adverbs) are NEVER reduced — do NOT wrap them with *.
+   WRONG example: aɪm*stɪl*ɑnðəfɛns (still is an adverb = content word, never reduced)
+   RIGHT example: *aɪm*stɪlɑnðəfɛns (I'm is reduced, still is not)
 3. Strong sounds: NO markers
 4. Punctuation: add a space after , and . — keep ? and ! attached to last word — add spaces around -
 5. Do NOT use ˈ stress markers
