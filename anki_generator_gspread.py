@@ -177,9 +177,19 @@ ANCHOR EXAMPLES (illustrate rule application, not word lists):
 - going to → ɡənə  [reduction]
 - want to → wɑnə  [reduction]
 
-RHYTHM GROUPING:
-Split long phrases into natural breath groups separated by a single space.
-Within a group: no spaces. Between groups: one space.
+FLAPPING EXCEPTIONS (never flap in these environments):
+- t before s: "it's" → ɪts (NOT ɪɾs)
+- t before ð: "but the" → bətðə (NOT bəɾðə)
+- t after s: "just" → dʒʌst
+- t in clusters: "next" → nɛkst
+
+STRESS AND RHYTHM:
+Mark primary stress with ' before the stressed syllable.
+Use stress marks to show natural rhythm grouping in longer phrases.
+Examples:
+- probably like an hour → 'prɑbli 'laɪkən 'aʊər
+- when you get a chance → wɛnjə'ɡɛɾə'tʃæns
+- really long → 'rɪli'lɔŋ
 
 FORMAT:
 - CRITICAL: Keep ALL punctuation from the original (. , ? !) — never drop them
@@ -190,10 +200,10 @@ FORMAT:
 
 SELF-CHECK (apply before output):
 - Every t/d between vowels/sonorants → ɾ including across word boundaries?
+- t before s or ð → never flapped?
 - All unstressed function words fully reduced?
-- All -ing endings dropping the g?
 - ALL punctuation from original preserved?
-- American English vowels used (ɑ not ɒ)?
+- Stress marks ' added to show rhythm?
 - Sounds like fast casual speech, not careful reading?
 
 CRITICAL RULE:
@@ -305,7 +315,10 @@ def apply_ipa_rules(text: str) -> str:
     text = re.sub(r'jæ(?=[,\.\?\!\s]|$)', 'jə', text)
     # but: bʌt → bət
     text = re.sub(r'bʌt', 'bət', text)
-    # フラッピング: 母音に挟まれたt → ɾ（ts, tr除外）
+    # 誤フラッピング逆変換（ɾの後がs,ðの場合はtに戻す）
+    text = re.sub(r'ɾ(?=s)', 't', text)
+    text = re.sub(r'ɾ(?=ð)', 't', text)
+    # フラッピング: 母音に挟まれたt → ɾ（後ろが母音のみ）
     vowels = 'aeiouæɑɛɪɔʊəɾʌ'
     sonorants = 'mnŋlr'
     # t のフラッピング（後ろが母音のみ、s,r,n,m,ŋ,l は除外）
