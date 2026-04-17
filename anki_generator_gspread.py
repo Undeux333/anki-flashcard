@@ -60,7 +60,7 @@ audio { display: none; }
 .back-speaker { font-size: 12px; font-weight: bold; color: #718096; flex-shrink: 0; }
 .bubble { flex: 1; background: #fff; border: 0.5px solid #e2e8f0; border-radius: 10px; padding: 10px 14px; font-size: 15px; line-height: 1.5; color: #2d3748; }
 .bubble.predict { border: 1.5px solid #f6c026; }
-.bubble b { color: #000; font-weight: bold; border-bottom: 2px solid #cbd5e0; }
+.bubble b { color: #000; font-weight: bold; }
 .action-row { display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin-top: 5px; }
 .explain-btn { font-size: 11px; color: #2b6cb0; cursor: pointer; font-weight: bold; padding: 4px 9px; border-radius: 10px; white-space: nowrap; border: 1px solid #bee3f8; background: #ebf4ff; }
 .script-icon-btn { font-size: 14px; cursor: pointer; padding: 3px 7px; border-radius: 8px; border: 1px solid #bee3f8; background: #ebf4ff; line-height: 1.4; }
@@ -211,7 +211,8 @@ async def process_audio(speech_lines: list, meanings: list, uid: str, tmpdir: st
 def format_script_text(text: str) -> str:
     t = text.replace("<", "&lt;").replace(">", "&gt;")
     t = re.sub(r'\((.*?)\)', r'<b>\1</b>', t)
-    t = re.sub(r'\*([^*]*)\*', r'<span style="color:#a0aec0;font-size:12px;font-style:italic;">[\1]</span>', t)
+    t = re.sub(r'_([^_]+)_', r'<u>\1</u>', t)
+    t = re.sub(r'\*([^*]*)\*', r'<span style="color:#a0aec0;font-size:12px;font-style:italic;">(\1)</span>', t)
     return t.replace("\n", "<br>")
 
 def build_front(f_fn, speech_lines, hints):
