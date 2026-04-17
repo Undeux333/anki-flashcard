@@ -71,6 +71,10 @@ audio { display: none; }
 .explain-box { margin-top: 5px; background: #ebf4ff; border-left: 3px solid #4299e1; border-radius: 0 8px 8px 0; padding: 9px 12px; font-size: 13px; color: #2c5282; font-style: italic; line-height: 1.55; display: none; }
 .rl { font-size: 10px; font-weight: bold; padding: 2px 8px; border-radius: 10px; }
 .rn { background: #e8f4fd; color: #1d6fa4; }
+.bubble-wrap { display: inline-flex; flex-direction: column; align-items: flex-start; flex: 1; }
+.ipa-wrap { display: flex; justify-content: flex-end; margin-top: 4px; }
+.ipa-row { display: inline-block; padding: 5px 10px; background: #fff; border: 0.5px solid #e2e8f0; border-radius: 8px; font-size: 15px; line-height: 1.9; letter-spacing: 0.2px; color: #2d3748; font-family: serif; }
+.ipa-row.predict { border: 1.5px solid #f6c026; }
 """
 
 # ═══════════════════════════════════════════════
@@ -137,13 +141,23 @@ One explanation per phrase, in the same order.
 
 {hint_instruction}
 
+Also generate IPA transcription for each phrase as it would be naturally spoken by a native American English speaker.
+Apply reduction, linking, and assimilation rules:
+- Connected sounds: write them together without spaces (e.g. "did you" → "dɪdʒu", "find that" → "faɪndðə")
+- Reduced sounds (weak/unstressed): wrap with * (e.g. *aɪ*, *ðə*)
+- Normal/strong sounds: no marker
+- Add a space after , and . and around -
+- Do NOT use ˈ stress markers
+- Do NOT show elision — simply omit the dropped sound
+
 Input:
 {input_text}
 
 Return ONLY valid JSON: 
 {{
   "meanings": ["explanation for phrase 1", "explanation for phrase 2", ...],
-  "hints": [null, "hint for hidden phrase", null, ...]
+  "hints": [null, "hint for hidden phrase", null, ...],
+  "ipa": ["IPA for phrase 1", "IPA for phrase 2", ...]
 }}"""
 
     for attempt in range(5):
@@ -157,11 +171,14 @@ Return ONLY valid JSON:
             while len(data["meanings"]) < label_count:
                 data["meanings"].append("(Check original text for nuance)")
             data["meanings"] = data["meanings"][:label_count]
-            # hints の長さを補正
             hints = data.get("hints", [])
             while len(hints) < label_count:
                 hints.append(None)
             data["hints"] = hints[:label_count]
+            ipa = data.get("ipa", [])
+            while len(ipa) < label_count:
+                ipa.append("")
+            data["ipa"] = ipa[:label_count]
             return data
         except Exception as e:
             if "429" in str(e) or "503" in str(e):
@@ -231,7 +248,19 @@ async def process_audio(speech_lines: list, meanings: list, uid: str, tmpdir: st
     back_audio.export(str(Path(tmpdir) / b_fn), format="mp3")
     return f_fn, b_fn, s_files, m_files
 
-def format_script_text(text: str) -> str:
+def format_ipa(ipa_text: str) -> str:
+    """*...* で囲まれた部分をグレーに、それ以外は通常色で返す"""
+    if not ipa_text:
+        return ""
+    result = ""
+    parts = re.split(r'(\*[^*]*\*)', ipa_text)
+    for part in parts:
+        if part.startswith('*') and part.endswith('*'):
+            inner = part[1:-1]
+            result += f'<span style="color:#a0aec0;">{inner}</span>'
+        else:
+            result += part
+    return result
     t = text.replace("<", "&lt;").replace(">", "&gt;")
     t = re.sub(r'\((.*?)\)', r'<b>\1</b>', t)
     t = re.sub(r'_([^_]+)_', r'<u>\1</u>', t)
@@ -274,20 +303,30 @@ def build_front(f_fn, speech_lines, hints):
         f'</div>'
     )
 
-def build_back(speech_lines, s_files, m_files, meanings, b_fn):
+def build_back(speech_lines, s_files, m_files, meanings, b_fn, ipa_list):
     rows = ""
     for idx, line in enumerate(speech_lines):
         disp = format_script_text(line['text'])
         sp   = line['speaker']
         mt   = meanings[idx]
+        ipa  = ipa_list[idx] if idx < len(ipa_list) else ""
         bubble_class = "bubble predict" if line['hidden'] else "bubble"
+        ipa_class = "ipa-row predict" if line['hidden'] else "ipa-row"
+        ipa_html = ""
+        if ipa:
+            ipa_html = (
+                f'<div class="ipa-wrap">'
+                f'<div class="{ipa_class}">{format_ipa(ipa)}</div>'
+                f'</div>'
+            )
         rows += (
             f'<div class="line-block">'
             f'<div class="line-row">'
             f'<span class="back-speaker">{sp}:</span>'
-            f'<div class="{bubble_class}">{disp}</div>'
+            f'<div class="bubble-wrap"><div class="{bubble_class}">{disp}</div></div>'
             f'<audio id="s{idx}" src="{s_files[idx]}"></audio>'
             f'</div>'
+            f'{ipa_html}'
             f'<div class="action-row">'
             f'<div class="explain-btn" onclick="document.getElementById(\'m{idx}\').play()">&#128266; Explain</div>'
             f'<div class="script-icon-btn" onclick="epToggle(this,\'ex{idx}\')">&#128196;</div>'
@@ -387,7 +426,7 @@ def main():
     print(f"   {len(pending)} 件見つかりました\n")
 
     model = genanki.Model(
-        ANKI_MODEL_ID, "EP_Model_v18",
+        ANKI_MODEL_ID, "EP_Model_v19",
         fields=[{"name": "Front"}, {"name": "Back"}],
         templates=[{"name": "Card 1", "qfmt": "{{Front}}", "afmt": "{{Back}}"}],
         css=CARD_CSS
@@ -408,6 +447,7 @@ def main():
                 content = generate_content(client, speech_lines)
                 meanings = content["meanings"]
                 hints = content.get("hints", [])
+                ipa_list = content.get("ipa", [])
 
                 f_fn, b_fn, s_files, m_files = asyncio.run(
                     process_audio(speech_lines, meanings, uid, tmpdir)
@@ -418,7 +458,7 @@ def main():
                     model=model,
                     fields=[
                         build_front(f_fn, speech_lines, hints),
-                        build_back(speech_lines, s_files, m_files, meanings, b_fn)
+                        build_back(speech_lines, s_files, m_files, meanings, b_fn, ipa_list)
                     ],
                     guid=uid
                 ))
