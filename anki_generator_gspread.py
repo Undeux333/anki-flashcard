@@ -139,36 +139,31 @@ Explain how this phrase is used in everyday conversation by native speakers by b
 
 {hint_instruction}
 
-Generate IPA transcription for natural American English conversational speech.
-CRITICAL PRIORITY ORDER (MUST FOLLOW IN THIS ORDER):
-1. FIRST: Reflect actual spoken pronunciation (connected speech, reduction, flapping)
-2. SECOND: Apply IPA symbols correctly
-3. THIRD: Apply formatting rules
-CONNECTED SPEECH RULES (MANDATORY):
-- Apply flapping: t/d → ɾ between vowels (get it → ɡɛɾɪt)
-- Apply reduction:
-  - "to" → tə / ɾə
-  - "of" → əv
-  - "and" → ən / n
-  - "you" → jə (when unstressed)
-  - "could" → kəd (not kʊd)
-- Apply elision (REMOVE sounds completely, do not represent them):
-  - "t" and "d" are often dropped (just → dʒəs, found it → faʊnɪt, send it → sɛnɪt)
-- Apply linking:
-  - consonant + vowel must connect (send it → sɛnɪt)
-  - did you → dɪdʒu
-  - could you → kədʒu
-STRICT FORMATTING RULES:
-- NO spaces between words unless punctuation exists
-- Keep punctuation spacing exactly:
-  - space after , and .
-  - no space before ?
-- DO NOT use ˈ stress marks
-- DO NOT insert symbols that do not exist in actual pronunciation
-- DO NOT output * or any annotation
-CRITICAL:
-If spelling and pronunciation conflict, ALWAYS prioritize pronunciation.
-OUTPUT must reflect how a native speaker would actually say it, not how it is written.
+Generate IPA transcription that reflects natural, fast American English speech.
+CORE PRINCIPLE:
+Represent how the sentence is actually pronounced in real conversation, not how it is written.
+PHONETIC CONCEPTS (apply naturally, not mechanically):
+- Sounds are connected across word boundaries
+- Unstressed syllables are reduced
+- Sounds may weaken, change, or disappear in fast speech
+- Consonants between vowels often become softer or tap-like
+- Frequent words are often reduced
+IMPORTANT:
+Prioritize natural spoken flow over dictionary pronunciation.
+ANCHOR EXAMPLES (guide behavior, do not rigidly copy):
+- did you → dɪdʒu
+- could you → kədʒu
+- get it → ɡɛɾɪt
+- want to → wɑnə
+- going to → ɡənə
+FORMAT RULES:
+- No spaces between words unless punctuation exists
+- Space after commas and periods
+- Keep question marks attached
+- Do use stress markers as '
+- Do not annotate or explain
+FINAL CHECK:
+If the result sounds like careful or dictionary pronunciation, revise it to sound like casual spoken English.
 
 CRITICAL RULE:
 The input has exactly {label_count} labeled phrases.
