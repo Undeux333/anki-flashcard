@@ -261,30 +261,20 @@ async def process_audio(speech_lines: list, meanings: list, uid: str, tmpdir: st
     return f_fn, b_fn, s_files, m_files
 
 def format_ipa(ipa_text: str) -> str:
-    """*...* マークを除去し、句読点前後以外のスペースを削除して返す"""
+    """*...* マークを除去し、スペースを正規化して返す"""
     if not ipa_text:
         return ""
-    # *...* マークを除去（色分けなし）
+    # *...* マークを除去
     text = re.sub(r'\*([^*]*)\*', r'\1', ipa_text)
-    # 句読点後のスペースは保持、それ以外のスペースは削除
-    result = ""
-    i = 0
-    while i < len(text):
-        ch = text[i]
-        if ch == ' ':
-            # 前の文字が , または . の場合はスペース保持
-            if result and result[-1] in (',', '.'):
-                result += ch
-            # 次の文字が - の場合または前の文字が - の場合はスペース保持
-            elif i + 1 < len(text) and text[i + 1] == '-':
-                result += ch
-            elif result and result[-1] == '-':
-                result += ch
-            # それ以外はスペース削除
-        else:
-            result += ch
-        i += 1
-    return result
+    # ˈ を除去
+    text = text.replace('ˈ', '')
+    # まず全スペースを削除
+    text = text.replace(' ', '')
+    # , と . の後にスペースを追加（? ! の前は除く）
+    text = re.sub(r'([,\.])(?=[^\s])', r'\1 ', text)
+    # - の前後にスペースを追加
+    text = re.sub(r'\s*-\s*', ' - ', text)
+    return text.strip()
 
 def format_script_text(text: str) -> str:
     t = text.replace("<", "&lt;").replace(">", "&gt;")
