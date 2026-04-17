@@ -110,6 +110,7 @@ def generate_content(client, speech_lines: list) -> dict:
         return text.strip()
 
     input_text = "\n".join([f"{l['speaker']}: {clean_for_gemini(l['text'])}" for l in speech_lines])
+    print(f"  DEBUG input_text:\n{input_text}")
 
     hidden_indices = [i for i, l in enumerate(speech_lines) if l['hidden']]
 
