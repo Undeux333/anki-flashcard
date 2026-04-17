@@ -107,6 +107,8 @@ def generate_content(client, speech_lines: list) -> dict:
 
     def clean_for_gemini(text: str) -> str:
         text = re.sub(r'\+\+[^+]*\+\+', '', text)
+        text = re.sub(r'_([^_]+)_', r'\1', text)
+        text = re.sub(r'\(|\)', '', text)
         return text.strip()
 
     input_text = "\n".join([f"{l['speaker']}: {clean_for_gemini(l['text'])}" for l in speech_lines])
