@@ -103,7 +103,25 @@ def generate_content(client, speech_lines: list) -> dict:
     input_text = "\n".join([f"{l['speaker']}: {l['text']}" for l in speech_lines])
 
     hidden_indices = [i for i, l in enumerate(speech_lines) if l['hidden']]
-    hidden_info = f"Hidden phrase indices (0-based): {hidden_indices}" if hidden_indices else "No hidden phrases."
+
+    # 隠しフレーズごとに「正解フレーズ」と「それより前の文脈」を構築
+    hidden_hints_info = ""
+    for idx in hidden_indices:
+        hidden_phrase = speech_lines[idx]['text'].strip()
+        context_before = "\n".join(
+            [f"{l['speaker']}: {l['text']}" for l in speech_lines[:idx]]
+        )
+        hidden_hints_info += f"""
+Hidden phrase at index {idx}: "{hidden_phrase}"
+Context before it:
+{context_before}
+→ Generate a hint that guides the learner toward this response WITHOUT revealing the actual words. Max 10 words.
+"""
+
+    hint_instruction = (
+        f"For hidden phrases, generate hints as described below. For non-hidden phrases, use null.\n{hidden_hints_info}"
+        if hidden_indices else "No hidden phrases. Use null for all hints."
+    )
 
     prompt = f"""Explain the nuance of EACH phrase marked with A: or B: in the following dialogue. 
 Explain how this phrase is used in everyday conversation by native speakers by briefly describing the situation or feeling it is used for. Focus on the speaker's feeling and intention. Keep it short, simple, and natural in one sentence. Use plain, everyday English. Avoid abstract or textbook-like language, and avoid extra details or unnecessary assumptions. Write as if explaining to an English learner in a casual conversation.
@@ -112,9 +130,7 @@ The input has exactly {label_count} labeled phrases.
 You MUST provide exactly {label_count} explanations in the "meanings" array. 
 One explanation per phrase, in the same order.
 
-For hidden phrases, also provide a short hint in "hints" telling the learner what kind of response to give.
-The hint must be a natural English instruction, max 10 words. For non-hidden phrases, use null.
-{hidden_info}
+{hint_instruction}
 
 Input:
 {input_text}
