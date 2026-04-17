@@ -134,31 +134,32 @@ Context before it:
 
     prompt = f"""Explain the nuance of EACH phrase marked with A: or B: in the following dialogue. 
 Explain how this phrase is used in everyday conversation by native speakers by briefly describing the situation or feeling it is used for. Focus on the speaker's feeling and intention. Keep it short, simple, and natural in one sentence. Use plain, everyday English. Avoid abstract or textbook-like language, and avoid extra details or unnecessary assumptions. Write as if explaining to an English learner in a casual conversation.
-CRITICAL RULE: 
-The input has exactly {label_count} labeled phrases. 
-You MUST provide exactly {label_count} explanations in the "meanings" array. 
-One explanation per phrase, in the same order.
 
 {hint_instruction}
 
 Also generate IPA transcription for each phrase as it would be naturally spoken by a native American English speaker.
 STRICT IPA RULES — follow exactly:
 1. Connected sounds: write without ANY spaces between them (e.g. "did you" → dɪdʒu, "find that file" → faɪndðəfaɪl)
-2. Reduced/weak sounds: wrap with * on both sides (e.g. function words like "I", "a", "the", "to", "of", "and", "it", "in" are almost always reduced → *aɪ*, *ə*, *ðə*)
-3. Strong/content sounds (nouns, verbs, adjectives, adverbs): NO markers
+2. Reduced/weak sounds: wrap with * on both sides. Use your judgment based on natural American English pronunciation — function words are often reduced (e.g. *aɪ*, *ðə*, *tə*, *əv*, *ən*) but content words can also be reduced in fast speech. Do not apply fixed rules.
+3. Strong sounds: NO markers
 4. Punctuation: add a space after , and . — keep ? and ! attached to last word — add spaces around -
 5. Do NOT use ˈ stress markers
 6. Do NOT show elision — simply omit the dropped sound
-7. CRITICAL: Do NOT insert spaces between words unless there is a punctuation mark — connected speech has NO word boundaries
+7. CRITICAL: Do NOT insert spaces between words unless there is a punctuation mark
+
+CRITICAL RULE:
+The input has exactly {label_count} labeled phrases.
+Return exactly {label_count} objects in the "lines" array, one per phrase, in the exact same order as the input.
 
 Input:
 {input_text}
 
-Return ONLY valid JSON: 
+Return ONLY valid JSON:
 {{
-  "meanings": ["explanation for phrase 1", "explanation for phrase 2", ...],
-  "hints": [null, "hint for hidden phrase", null, ...],
-  "ipa": ["IPA for phrase 1", "IPA for phrase 2", ...]
+  "lines": [
+    {{"meaning": "explanation", "hint": null, "ipa": "IPA string"}},
+    ...
+  ]
 }}"""
 
     for attempt in range(5):
@@ -169,18 +170,15 @@ Return ONLY valid JSON:
                 config=types.GenerateContentConfig(response_mime_type="application/json", temperature=0.2)
             )
             data = json.loads(response.text.strip())
-            while len(data["meanings"]) < label_count:
-                data["meanings"].append("(Check original text for nuance)")
-            data["meanings"] = data["meanings"][:label_count]
-            hints = data.get("hints", [])
-            while len(hints) < label_count:
-                hints.append(None)
-            data["hints"] = hints[:label_count]
-            ipa = data.get("ipa", [])
-            while len(ipa) < label_count:
-                ipa.append("")
-            data["ipa"] = ipa[:label_count]
-            return data
+            lines = data.get("lines", [])
+            while len(lines) < label_count:
+                lines.append({"meaning": "(Check original text for nuance)", "hint": None, "ipa": ""})
+            lines = lines[:label_count]
+            return {
+                "meanings": [l.get("meaning", "") for l in lines],
+                "hints":    [l.get("hint", None)  for l in lines],
+                "ipa":      [l.get("ipa", "")      for l in lines],
+            }
         except Exception as e:
             if "429" in str(e) or "503" in str(e):
                 time.sleep(25)
