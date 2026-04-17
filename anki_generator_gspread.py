@@ -261,6 +261,8 @@ def format_ipa(ipa_text: str) -> str:
         else:
             result += part
     return result
+
+def format_script_text(text: str) -> str:
     t = text.replace("<", "&lt;").replace(">", "&gt;")
     t = re.sub(r'\((.*?)\)', r'<b>\1</b>', t)
     t = re.sub(r'_([^_]+)_', r'<u>\1</u>', t)
