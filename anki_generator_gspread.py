@@ -139,14 +139,36 @@ Explain how this phrase is used in everyday conversation by native speakers by b
 
 {hint_instruction}
 
-Also generate IPA transcription for each phrase as it would be naturally spoken by a native American English speaker.
-STRICT IPA RULES — follow exactly:
-1. Connected sounds: write without ANY spaces between them (e.g. "did you" → dɪdʒu, "find that file" → faɪndðəfaɪl)
-2. Punctuation: add a space after , and . — keep ? and ! attached to last word — add spaces around -
-3. Do NOT use ˈ stress markers
-4. Do NOT show elision — simply omit the dropped sound
-5. CRITICAL: Do NOT insert spaces between words unless there is a punctuation mark
-6. Do NOT use any * markers
+Generate IPA transcription for natural American English conversational speech.
+CRITICAL PRIORITY ORDER (MUST FOLLOW IN THIS ORDER):
+1. FIRST: Reflect actual spoken pronunciation (connected speech, reduction, flapping)
+2. SECOND: Apply IPA symbols correctly
+3. THIRD: Apply formatting rules
+CONNECTED SPEECH RULES (MANDATORY):
+- Apply flapping: t/d → ɾ between vowels (get it → ɡɛɾɪt)
+- Apply reduction:
+  - "to" → tə / ɾə
+  - "of" → əv
+  - "and" → ən / n
+  - "you" → jə (when unstressed)
+  - "could" → kəd (not kʊd)
+- Apply elision (REMOVE sounds completely, do not represent them):
+  - "t" and "d" are often dropped (just → dʒəs, found it → faʊnɪt, send it → sɛnɪt)
+- Apply linking:
+  - consonant + vowel must connect (send it → sɛnɪt)
+  - did you → dɪdʒu
+  - could you → kədʒu
+STRICT FORMATTING RULES:
+- NO spaces between words unless punctuation exists
+- Keep punctuation spacing exactly:
+  - space after , and .
+  - no space before ?
+- DO NOT use ˈ stress marks
+- DO NOT insert symbols that do not exist in actual pronunciation
+- DO NOT output * or any annotation
+CRITICAL:
+If spelling and pronunciation conflict, ALWAYS prioritize pronunciation.
+OUTPUT must reflect how a native speaker would actually say it, not how it is written.
 
 CRITICAL RULE:
 The input has exactly {label_count} labeled phrases.
