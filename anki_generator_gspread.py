@@ -165,7 +165,8 @@ REDUCTION HEURISTICS:
 - Shorten or compress multi-syllable words
 - Prefer smoother, faster pronunciation over careful articulation
 - When identical or similar consonants meet across words, merge or soften them
-- Consonants like t/d between vowels or near weak vowels should be softened or flapped (ɾ)
+- t and d between vowels or near weak vowels MUST be flapped as ɾ
+- Avoid keeping strong [t] or [d] in these positions unless clearly stressed
 
 ANCHOR EXAMPLES (guide behavior, minimal set):
 - did you → dɪdʒu
