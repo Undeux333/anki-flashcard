@@ -273,7 +273,7 @@ def format_ipa(ipa_text: str) -> str:
         ch = text[i]
         if ch == ' ':
             # 前の文字が , または . の場合はスペース保持
-            if result and result[-1] in ('，', '.', ','):
+            if result and result[-1] in (',', '.'):
                 result += ch
             # 次の文字が - の場合または前の文字が - の場合はスペース保持
             elif i + 1 < len(text) and text[i + 1] == '-':
