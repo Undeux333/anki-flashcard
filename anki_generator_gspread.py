@@ -139,61 +139,51 @@ Explain how this phrase is used in everyday conversation by native speakers by b
 
 {hint_instruction}
 
-Generate IPA transcription for natural, fast American English speech.
+Generate IPA for natural fast American English conversational speech.
 
 CORE PRINCIPLE:
-Represent how the sentence is actually pronounced in real conversation, not how it is written.
+Always choose the more reduced, connected form over the careful/dictionary form.
+When in doubt, reduce more.
 
-PROCESS (MANDATORY):
-1. Rewrite the sentence into its natural spoken form (apply reductions, linking, and sound changes).
-2. Convert that spoken form into IPA.
+PHONOLOGICAL RULES (apply to all words):
 
-PHONETIC BEHAVIOR:
-- Sounds connect across word boundaries
-- Unstressed syllables are reduced
-- Sounds may weaken, change, or disappear in fast speech
-- Consonants between vowels often become a flap (ɾ)
-- Frequent words are often reduced
+[Flapping]
+Any /t/ or /d/ between vowels or sonorants → ɾ
+Apply ACROSS word boundaries, not just within words.
 
-SENTENCE-LEVEL FLOW:
-Treat the entire sentence as one continuous sound unit.
-Do not preserve word boundaries if they break natural rhythm.
+[Vowel reduction]
+All unstressed vowels → ə (schwa) unless they carry meaning-critical stress.
+Short function words (articles, prepositions, conjunctions, auxiliaries, pronouns) are almost always reduced.
 
-REDUCTION HEURISTICS:
-- Reduce unstressed vowels toward schwa (ə)
-- Simplify difficult consonant clusters
-- Shorten or compress multi-syllable words
-- Prefer smoother, faster pronunciation over careful articulation
-- When identical or similar consonants meet across words, merge or soften them
-- t and d between vowels or near weak vowels MUST be flapped as ɾ
-- Avoid keeping strong [t] or [d] in these positions unless clearly stressed
+[Final consonant behavior]
+Word-final /t/ before a pause or consonant: weaken or omit.
+Word-final /g/ in -ing suffix: omit.
+Syllable-final /n/ before consonant: may become syllabic (n̩).
 
-ANCHOR EXAMPLES (guide behavior, minimal set):
-- did you → dɪdʒu
-- could you → kədʒu
-- get it → ɡɛɾɪt
-- want to → wɑnə
-- going to → ɡənə
+[Linking]
+Consonant-final word + vowel-initial word: merge without boundary.
+Palatalization: t/d + j → tʃ/dʒ across boundaries.
 
-COMMON REDUCTIONS (override spelling when needed):
-- probably → prɑbli
-- t/d may flap (ɾ) or disappear in fast speech
+[Elision]
+Unstressed /t/ and /d/ in consonant clusters: omit.
+Schwa in unstressed syllables of rapid speech: may be omitted entirely.
 
-FORMAT RULES:
-- Do not insert spaces between words unless punctuation exists
-- Add a space after commas and periods
-- Keep question marks attached to the last word
-- Use ' for stress if needed
-- Do not annotate or explain
+RHYTHM GROUPING:
+Group words into natural spoken chunks separated by spaces.
+A chunk is a sequence of words spoken without a breath or pause.
+Longer sentences will have 2-4 chunks.
+Within each chunk: no spaces.
+Between chunks: one space.
 
-CRITICAL:
-Do NOT preserve spelling-based pronunciation.
-You MUST modify the sound structure to reflect real speech.
+FORMAT:
+- Space after , and .
+- No space before ? or !
+- Use ' before the syllable carrying primary stress (only when essential for meaning)
+- No ˈ (IPA stress mark)
+- No * or any annotation
 
-FINAL CHECK (STRICT):
-- If any word sounds like dictionary pronunciation, reduce it further
-- Ensure connected speech feels natural and fast
-- Prefer MORE reduction if unsure
+FINAL CHECK:
+Read the output aloud mentally. If it sounds like careful or slow speech, reduce further.
 
 CRITICAL RULE:
 The input has exactly {label_count} labeled phrases.
