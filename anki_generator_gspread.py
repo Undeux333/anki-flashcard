@@ -100,16 +100,21 @@ def get_speech_lines(phrase):
 
 def generate_content(client, speech_lines: list) -> dict:
     label_count = len(speech_lines)
-    input_text = "\n".join([f"{l['speaker']}: {l['text']}" for l in speech_lines])
+
+    def clean_for_gemini(text: str) -> str:
+        text = re.sub(r'\+\+[^+]*\+\+', '', text)
+        return text.strip()
+
+    input_text = "\n".join([f"{l['speaker']}: {clean_for_gemini(l['text'])}" for l in speech_lines])
 
     hidden_indices = [i for i, l in enumerate(speech_lines) if l['hidden']]
 
     # 隠しフレーズごとに「正解フレーズ」と「それより前の文脈」を構築
     hidden_hints_info = ""
     for idx in hidden_indices:
-        hidden_phrase = speech_lines[idx]['text'].strip()
+        hidden_phrase = clean_for_gemini(speech_lines[idx]['text'])
         context_before = "\n".join(
-            [f"{l['speaker']}: {l['text']}" for l in speech_lines[:idx]]
+            [f"{l['speaker']}: {clean_for_gemini(l['text'])}" for l in speech_lines[:idx]]
         )
         hidden_hints_info += f"""
 Hidden phrase at index {idx}: "{hidden_phrase}"
