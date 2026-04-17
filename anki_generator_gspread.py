@@ -407,7 +407,7 @@ def main():
 
             except Exception as e:
                 err_s = str(e).lower()
-                status_to_set = STATUS_TIMEOUT if ("429" in err_s or "503" in err_s or "timeout" in err_s or "deadline" in err_s or "no audio" in err_s) else STATUS_ERROR
+                status_to_set = STATUS_TIMEOUT if ("429" in err_s or "503" in err_s or "timeout" in err_s or "deadline" in err_s or "no audio" in err_s or "server disconnected" in err_s) else STATUS_ERROR
                 print(f"    ❌ 失敗({status_to_set}): {e}")
                 try:
                     update_status(sheet, row, status_to_set)
