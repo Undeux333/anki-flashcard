@@ -162,8 +162,12 @@ FORMAT RULES:
 - Keep question marks attached
 - Do use stress markers as '
 - Do not annotate or explain
-FINAL CHECK:
-If the result sounds like careful or dictionary pronunciation, revise it to sound like casual spoken English.
+FINAL CHECK (STRICT):
+- If any word still resembles dictionary pronunciation, reduce it further
+- Ensure common reductions are applied (e.g., weak vowels, dropped consonants)
+- Ensure connected speech sounds natural when spoken quickly
+
+If unsure, prefer MORE reduction rather than less.
 
 CRITICAL RULE:
 The input has exactly {label_count} labeled phrases.
