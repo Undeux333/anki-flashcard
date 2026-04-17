@@ -155,6 +155,10 @@ PHONETIC BEHAVIOR:
 - Consonants between vowels often become a flap (ɾ)
 - Frequent words are often reduced
 
+SENTENCE-LEVEL FLOW:
+Treat the entire sentence as one continuous sound unit.
+Do not preserve word boundaries if they break natural rhythm.
+
 REDUCTION HEURISTICS:
 - Reduce unstressed vowels toward schwa (ə)
 - Simplify difficult consonant clusters
