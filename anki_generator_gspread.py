@@ -182,6 +182,7 @@ Split long phrases into natural breath groups separated by a single space.
 Within a group: no spaces. Between groups: one space.
 
 FORMAT:
+- CRITICAL: Keep ALL punctuation from the original (. , ? !) — never drop them
 - Space after , and .
 - No space before ? or !
 - Use ' for primary stress only when critical for meaning
@@ -192,6 +193,7 @@ SELF-CHECK (apply before output):
 - All unstressed function words fully reduced?
 - All -ing endings dropping the g?
 - Long phrases split into rhythm groups?
+- ALL punctuation from original preserved?
 - Sounds like fast casual speech, not careful reading?
 
 CRITICAL RULE:
