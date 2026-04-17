@@ -112,7 +112,6 @@ def generate_content(client, speech_lines: list) -> dict:
         return text.strip()
 
     input_text = "\n".join([f"{l['speaker']}: {clean_for_gemini(l['text'])}" for l in speech_lines])
-    print(f"  DEBUG input_text:\n{input_text}")
 
     hidden_indices = [i for i, l in enumerate(speech_lines) if l['hidden']]
 
@@ -183,7 +182,6 @@ Return ONLY valid JSON:
                 config=types.GenerateContentConfig(response_mime_type="application/json", temperature=0.2)
             )
             data = json.loads(response.text.strip())
-            print(f"  DEBUG Gemini response: {response.text[:1000]}")
             lines = data.get("lines", [])
             while len(lines) < label_count:
                 lines.append({"meaning": "(Check original text for nuance)", "hint": None, "ipa": ""})
@@ -263,17 +261,29 @@ async def process_audio(speech_lines: list, meanings: list, uid: str, tmpdir: st
     return f_fn, b_fn, s_files, m_files
 
 def format_ipa(ipa_text: str) -> str:
-    """*...* で囲まれた部分をグレーに、それ以外は通常色で返す"""
+    """*...* マークを除去し、句読点前後以外のスペースを削除して返す"""
     if not ipa_text:
         return ""
+    # *...* マークを除去（色分けなし）
+    text = re.sub(r'\*([^*]*)\*', r'\1', ipa_text)
+    # 句読点後のスペースは保持、それ以外のスペースは削除
     result = ""
-    parts = re.split(r'(\*[^*]*\*)', ipa_text)
-    for part in parts:
-        if part.startswith('*') and part.endswith('*'):
-            inner = part[1:-1]
-            result += f'<span style="color:#a0aec0;">{inner}</span>'
+    i = 0
+    while i < len(text):
+        ch = text[i]
+        if ch == ' ':
+            # 前の文字が , または . の場合はスペース保持
+            if result and result[-1] in ('，', '.', ','):
+                result += ch
+            # 次の文字が - の場合または前の文字が - の場合はスペース保持
+            elif i + 1 < len(text) and text[i + 1] == '-':
+                result += ch
+            elif result and result[-1] == '-':
+                result += ch
+            # それ以外はスペース削除
         else:
-            result += part
+            result += ch
+        i += 1
     return result
 
 def format_script_text(text: str) -> str:
