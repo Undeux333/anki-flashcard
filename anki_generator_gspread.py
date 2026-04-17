@@ -139,40 +139,49 @@ Explain how this phrase is used in everyday conversation by native speakers by b
 
 {hint_instruction}
 
-Generate IPA transcription that reflects natural, fast American English speech.
+Generate IPA transcription for natural, fast American English speech.
+
 CORE PRINCIPLE:
 Represent how the sentence is actually pronounced in real conversation, not how it is written.
-PHONETIC CONCEPTS (apply naturally, not mechanically):
-- Sounds are connected across word boundaries
+
+PROCESS (MANDATORY):
+1. First, mentally rewrite the sentence into its natural spoken form (apply reductions, linking, and sound changes).
+2. Then convert that spoken form into IPA.
+
+PHONETIC BEHAVIOR:
+- Sounds connect across word boundaries
 - Unstressed syllables are reduced
-- Sounds may weaken, change, or disappear in fast speech
-- Consonants between vowels often become softer or tap-like
+- Sounds may weaken, change, or disappear
+- Consonants between vowels often become a flap (ɾ)
 - Frequent words are often reduced
-REDUCTION HEURISTICS (apply automatically):
-- If a consonant (especially t/d) is between vowels or near weak vowels, soften or tap it
-- If a syllable is unstressed, reduce or shorten its vowel
-- If a consonant cluster is hard to pronounce quickly, simplify it
-- If a word has multiple syllables, reduce internal vowels when possible
-IMPORTANT:
-Prioritize natural spoken flow over dictionary pronunciation.
-ANCHOR EXAMPLES (guide behavior, do not rigidly copy):
+
+REDUCTION HEURISTICS:
+- Reduce unstressed vowels toward schwa (ə)
+- Simplify difficult consonant clusters
+- Shorten or compress multi-syllable words
+- Prefer smoother, faster pronunciation over careful articulation
+
+ANCHOR EXAMPLES (guide behavior):
 - did you → dɪdʒu
 - could you → kədʒu
 - get it → ɡɛɾɪt
 - want to → wɑnə
 - going to → ɡənə
-FORMAT RULES:
-- No spaces between words unless punctuation exists
-- Space after commas and periods
-- Keep question marks attached
-- Do use stress markers as '
-- Do not annotate or explain
-FINAL CHECK (STRICT):
-- If any word still resembles dictionary pronunciation, reduce it further
-- Ensure common reductions are applied (e.g., weak vowels, dropped consonants)
-- Ensure connected speech sounds natural when spoken quickly
 
-If unsure, prefer MORE reduction rather than less.
+FORMAT RULES:
+- Do not insert spaces between words unless punctuation exists
+- Add a space after commas and periods
+- Keep question marks attached to the last word
+- Use ' for stress if needed
+- Do not annotate or explain
+
+CRITICAL:
+Do NOT preserve spelling-based pronunciation.
+Always prioritize natural spoken flow.
+
+FINAL CHECK:
+If the result sounds careful or dictionary-like, reduce it further.
+If unsure, prefer MORE reduction.
 
 CRITICAL RULE:
 The input has exactly {label_count} labeled phrases.
