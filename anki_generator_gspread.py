@@ -145,13 +145,13 @@ CORE PRINCIPLE:
 Represent how the sentence is actually pronounced in real conversation, not how it is written.
 
 PROCESS (MANDATORY):
-1. First, mentally rewrite the sentence into its natural spoken form (apply reductions, linking, and sound changes).
-2. Then convert that spoken form into IPA.
+1. Rewrite the sentence into its natural spoken form (apply reductions, linking, and sound changes).
+2. Convert that spoken form into IPA.
 
 PHONETIC BEHAVIOR:
 - Sounds connect across word boundaries
 - Unstressed syllables are reduced
-- Sounds may weaken, change, or disappear
+- Sounds may weaken, change, or disappear in fast speech
 - Consonants between vowels often become a flap (ɾ)
 - Frequent words are often reduced
 
@@ -161,12 +161,16 @@ REDUCTION HEURISTICS:
 - Shorten or compress multi-syllable words
 - Prefer smoother, faster pronunciation over careful articulation
 
-ANCHOR EXAMPLES (guide behavior):
+ANCHOR EXAMPLES (guide behavior, minimal set):
 - did you → dɪdʒu
 - could you → kədʒu
 - get it → ɡɛɾɪt
 - want to → wɑnə
 - going to → ɡənə
+
+COMMON REDUCTIONS (override spelling when needed):
+- probably → prɑbli
+- t/d may flap (ɾ) or disappear in fast speech
 
 FORMAT RULES:
 - Do not insert spaces between words unless punctuation exists
@@ -177,11 +181,12 @@ FORMAT RULES:
 
 CRITICAL:
 Do NOT preserve spelling-based pronunciation.
-Always prioritize natural spoken flow.
+You MUST modify the sound structure to reflect real speech.
 
-FINAL CHECK:
-If the result sounds careful or dictionary-like, reduce it further.
-If unsure, prefer MORE reduction.
+FINAL CHECK (STRICT):
+- If any word sounds like dictionary pronunciation, reduce it further
+- Ensure connected speech feels natural and fast
+- Prefer MORE reduction if unsure
 
 CRITICAL RULE:
 The input has exactly {label_count} labeled phrases.
