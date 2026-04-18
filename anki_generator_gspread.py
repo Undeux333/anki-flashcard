@@ -73,7 +73,7 @@ audio { display: none; }
 .rn { background: #e8f4fd; color: #1d6fa4; }
 .bubble-wrap { display: inline-flex; flex-direction: column; align-items: flex-start; flex: 1; }
 .ipa-wrap { display: flex; justify-content: flex-end; margin-top: 4px; }
-.ipa-row { display: inline-block; padding: 5px 10px; background: #fff; border: 0.5px solid #e2e8f0; border-radius: 8px; font-size: 18px; line-height: 1.9; letter-spacing: 0.2px; color: #2d3748; font-family: serif; }
+.ipa-row { display: inline-block; padding: 5px 10px; background: #2d3748; border: 0.5px solid #4a5568; border-radius: 8px; font-size: 18px; line-height: 1.9; letter-spacing: 0.2px; color: #e2e8f0; font-family: serif; }
 .ipa-row.predict { border: 1.5px solid #f6c026; }
 """
 
@@ -180,33 +180,58 @@ CONNECTED SPEECH ANCHOR EXAMPLES:
 
 STRESS ALGORITHM (apply in this order):
 
-STEP 1 — Remove stress from function words (never stressed):
-  articles (the, a, an), prepositions (of, for, to, at, in, on),
-  conjunctions (and, but, or), pronouns (I, you, he, she, we, they, it),
-  auxiliaries (is, am, are, was, were, have, has, do, does)
+STEP 1 — Classify every word into one of 4 levels:
 
-STEP 2 — Identify content words as stress candidates:
-  nouns, main verbs, adjectives, adverbs
+  LEVEL 1 (never stressed — always weak):
+    articles: a, an, the
+    prepositions: to, of, for, at, in, on, from
+    conjunctions: and, but, or
+    auxiliaries (unstressed): can, do, does, did, have, has, had, will, would, shall, should, could, may, might, must
 
-STEP 3 — Find the "new information" (most important):
-  What is the speaker trying to convey?
+  LEVEL 2 (weak by default, may be promoted):
+    pronouns: I, you, he, she, it, we, they, me, him, her, us, them
+    possessives: my, your, his, its, our, their
+    be-verbs: am, is, are, was, were, be, been, being
+    prepositions: about, above, after, before, under, over, between, into, through, without, within, around, against, during, since, until
+
+  LEVEL 3 (content-word-like, usually stressed):
+    demonstratives: this, that, these, those
+    quantifiers: some, any, no, all, both, each, every, either, neither, many, much, few, little, several
+
+  LEVEL 4 (always stress candidates):
+    nouns, main verbs, adjectives, adverbs
+    question words: what, who, which, whose, when, where, why, how
+
+STEP 2 — Remove Level 1 from stress candidates entirely.
+
+STEP 3 — Treat Level 2 as weak by default.
+
+STEP 4 — Keep Level 3 and Level 4 as stress candidates.
+
+STEP 5 — Identify ONE piece of "new information":
   What does the listener not yet know?
-  What is the problem, conclusion, or evaluation?
-  → This gets the strongest stress (')
+  What is the problem, conclusion, evaluation, or contrast?
+  → This is the main stress target.
 
-STEP 4 — Place strongest stress ' on the most important new information.
-  Important information tends to come late in the sentence,
-  but stress follows importance, NOT position.
+STEP 6 — Place strongest ' on the last important word near the new information.
+  Important information tends to come late, but stress follows importance, not position.
 
-STEP 5 — Give lighter stress to other content words.
-  Already-known or less critical content words get weak or no stress.
+STEP 7 — Apply secondary stress to other Level 3/4 words (lighter than main stress).
+  Already-known or less critical words get weak or no stress.
 
-KEY STRESS RULES:
-- Stress marks information priority, not word class alone
-- Adjective + noun: the NOUN is typically stronger (really LONG)
-- Function words are NEVER stressed unless contrastively emphasized
-- Do NOT stress every content word — only the most important ones
-- Existing information (already mentioned) gets weaker stress than new information
+STEP 8 — Promotion exceptions (force strong stress):
+  ① Contrastive emphasis
+  ② Single-word response
+  ③ Content-word function (nominalized or focused)
+
+STEP 9 — Final check:
+  Strong stress: ideally 1, maximum 2 per sentence.
+  The sentence must flow smoothly as connected speech.
+
+KEY RULES:
+- Adjective + noun: NOUN is typically stronger (really LONG, not REALLY long)
+- Level 1 and Level 2 words are NEVER stressed unless promoted by exception
+- Do NOT stress every content word
 
 CHUNK BOUNDARIES:
 Use | only where a native speaker would naturally take a brief pause or breath.
@@ -222,17 +247,19 @@ FORMAT:
 - No ˈ, no *, no annotations
 
 STRESS AND CHUNK EXAMPLES:
-- I'm still on the fence about taking the job. → aɪm'stɪlɑnðə'fɛns | ə'baʊɾeɪkɪnðə'dʒɑb.
-- The pay's great, but the commute's gonna be really long. → ðə'peɪz'ɡɹeɪt, | bətðəkə'mjuːts | 'ɡənəbi'ɹɪli'lɔŋ.
-- probably like an hour and a half each way → 'pɹɑbli'laɪkən | 'aʊərənə'hæf | 'ɪtʃ'weɪ.
-- Yeah, that's rough. That'll wear you out. → jə, 'ðæts'ɹʌf. 'ðæɾəl | 'wɛɹju'aʊt.
+- I'm still on the fence about taking the job. → aɪm'stɪlɑnðə'fɛns | əbaʊɾeɪkɪnðə'dʒɑb.
+- The pay's great, but the commute's gonna be really long. → ðəpeɪz'ɡɹeɪt, | bətðəkə'mjuːts | ɡənəbi'ɹɪli'lɔŋ.
+- probably like an hour and a half each way → 'pɹɑblilaɪkən | 'aʊərənə'hæf | 'ɪtʃ'weɪ.
+- Yeah, that's rough. That'll wear you out. → jə, 'ðæts'ɹʌf. ðæɾəl | 'wɛɹju'aʊt.
 
 SELF-CHECK (apply before output):
 - Every t/d between vowels/sonorants → ɾ including across word boundaries?
 - t before s or ð → never flapped?
-- Function words unstressed?
+- Level 1 words have no stress?
+- Level 2 words weak unless promoted?
 - Strongest stress on the most important NEW information?
 - Adjective+noun: noun gets stronger stress?
+- Strong stress: 1-2 per sentence maximum?
 - ALL punctuation from original preserved?
 - Sounds like fast casual speech, not careful reading?
 
@@ -343,8 +370,8 @@ def apply_ipa_rules(text: str) -> str:
     text = text.replace('ɒ', 'ɑ')
     # yeah: jæ → jə
     text = re.sub(r"jæ(?=[,\.\?\!\s']|$)", 'jə', text)
-    # but: bʌt → bət
-    text = re.sub(r'bʌt', 'bət', text)
+    # but → bə（文末除外）
+    text = re.sub(r'(bʌt|bət)(?![,\.\?\!])', 'bə', text)
     # and: ənd → ən（d脱落）
     text = re.sub(r'ənd', 'ən', text)
     # of: ʌv / ɔv → əv
