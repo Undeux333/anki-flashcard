@@ -248,7 +248,7 @@ FORMAT:
 
 STRESS AND CHUNK EXAMPLES:
 - I'm still on the fence about taking the job. → aɪm'stɪlɑnðə'fɛns | əbaʊɾeɪkɪnðə'dʒɑb.
-- The pay's great, but the commute's gonna be really long. → ðəpeɪz'ɡɹeɪt, | bətðəkə'mjuːts | ɡənəbi'ɹɪli'lɔŋ.
+- The pay's great, but the commute's gonna be really long. → ðəpeɪz'ɡɹeɪt, bəðəkə'mjuːtsɡənəbi | 'ɹɪli'lɔŋ.
 - probably like an hour and a half each way → 'pɹɑblilaɪkən | 'aʊərənə'hæf | 'ɪtʃ'weɪ.
 - Yeah, that's rough. That'll wear you out. → jə, 'ðæts'ɹʌf. ðæɾəl | 'wɛɹju'aʊt.
 
