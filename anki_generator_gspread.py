@@ -199,10 +199,7 @@ FORMAT:
 - Use ɹ for the English r sound, never r
 - Use ː for long vowels where appropriate (e.g. uː in commute, iː in need)
 - Use ' before stressed syllables
-- Use | to mark boundaries between meaningful semantic groups within a sentence.
-  A semantic group is a phrase that forms a natural unit of meaning.
-  Do NOT count words — cut where meaning naturally groups.
-  Examples of semantic groups: subject phrase, verb phrase, prepositional phrase, subordinate clause.
+- Use | only where a native speaker would naturally take a brief pause or breath in casual speech.
 
 STRESS AND CHUNK EXAMPLES:
 - I'm still on the fence about taking the job. → aɪm'stɪlɑnðə'fɛns | ə'baʊɾeɪkɪnðə'dʒɑb.
