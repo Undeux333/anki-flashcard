@@ -311,8 +311,6 @@ def apply_ipa_rules(text: str) -> str:
     """ルールベースのIPA後処理"""
     # 英国英語母音 → 米国英語
     text = text.replace('ɒ', 'ɑ')
-    # 長母音記号を除去（米国英語では通常使わない）
-    text = text.replace('ː', '')
     # yeah: jæ → jə
     text = re.sub(r"jæ(?=[,\.\?\!\s']|$)", 'jə', text)
     # but: bʌt → bət
@@ -321,17 +319,15 @@ def apply_ipa_rules(text: str) -> str:
     text = re.sub(r'ənd', 'ən', text)
     # of: ʌv / ɔv → əv
     text = re.sub(r'[ʌɔ]v(?=[^aeiouæɑɛɪɔʊə]|$)', 'əv', text)
-    # 誤フラッピング逆変換（ɾの後がs,ð,n,lの場合はtに戻す）
+    # 誤フラッピング逆変換
     text = re.sub(r'ɾ(?=s)', 't', text)
     text = re.sub(r'ɾ(?=ð)', 't', text)
     text = re.sub(r'ɾ(?=n)', 't', text)
     text = re.sub(r'ɾ(?=l)', 't', text)
-    # フラッピング: 母音に挟まれたt → ɾ（後ろが母音のみ）
+    # フラッピング: 母音に挟まれたt → ɾ
     vowels = 'aeiouæɑɛɪɔʊəɾʌ'
     sonorants = 'mnŋlr'
-    # t のフラッピング（後ろが母音のみ）
     text = re.sub(f'(?<=[{vowels}{sonorants}])t(?=[{vowels}])', 'ɾ', text)
-    # d のフラッピング（前が母音、後ろが母音の場合のみ）
     text = re.sub(f'(?<=[{vowels}])d(?=[{vowels}])', 'ɾ', text)
     return text
 
