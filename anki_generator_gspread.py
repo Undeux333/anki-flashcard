@@ -196,6 +196,7 @@ FORMAT:
 - Space after , and .
 - No space before ? or !
 - Use American English IPA only (ɑ not ɒ, ɛ not e)
+- Use ː for long vowels where appropriate (e.g. uː in commute, iː in need)
 - No ˈ, no *, no annotations
 
 SELF-CHECK (apply before output):
