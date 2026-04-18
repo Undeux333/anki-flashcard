@@ -196,8 +196,15 @@ FORMAT:
 - Space after , and .
 - No space before ? or !
 - Use American English IPA only (ɑ not ɒ, ɛ not e)
+- Use ɹ for the English r sound, never r
 - Use ː for long vowels where appropriate (e.g. uː in commute, iː in need)
+- Use ' before stressed syllables
+- Use | to mark chunk boundaries (natural breath or pause groups)
 - No ˈ, no *, no annotations
+
+STRESS AND CHUNK EXAMPLES:
+- probably like an hour and a half each way → 'prɑbli 'laɪkən 'aʊərənə | 'hæf 'ɪtʃ 'weɪ.
+- Yeah, that's rough. That'll wear you out. → jə, 'ðæts 'rʌf. | 'ðæɾəl 'wɛɹju 'aʊt.
 
 SELF-CHECK (apply before output):
 - Every t/d between vowels/sonorants → ɾ including across word boundaries?
@@ -320,7 +327,8 @@ def apply_ipa_rules(text: str) -> str:
     text = re.sub(r'ənd', 'ən', text)
     # of: ʌv / ɔv → əv
     text = re.sub(r'[ʌɔ]v(?=[^aeiouæɑɛɪɔʊə]|$)', 'əv', text)
-    # 誤フラッピング逆変換
+    # r → ɹ（ɾは除外）
+    text = re.sub(r'(?<![ɾ])r(?![ɾ])', 'ɹ', text)
     text = re.sub(r'ɾ(?=s)', 't', text)
     text = re.sub(r'ɾ(?=ð)', 't', text)
     text = re.sub(r'ɾ(?=n)', 't', text)
@@ -345,12 +353,20 @@ def format_ipa(ipa_text: str) -> str:
     text = text.replace('ˈ', '')
     # ルールベース後処理
     text = apply_ipa_rules(text)
-    # まず全スペースを削除
+    # | の前後スペースを一時的に保護
+    text = text.replace(' | ', '§CHUNK§')
+    text = text.replace('| ', '§CHUNK§')
+    text = text.replace(' |', '§CHUNK§')
+    text = text.replace('|', '§CHUNK§')
+    # 全スペースを削除
     text = text.replace(' ', '')
     # , と . の後にスペースを追加
     text = re.sub(r'([,\.])(?=[^\s])', r'\1 ', text)
     # - の前後にスペースを追加
     text = re.sub(r'\s*-\s*', ' - ', text)
+    # | を復元（前後にスペース）、多重スペースを正規化
+    text = text.replace('§CHUNK§', ' | ')
+    text = re.sub(r' {2,}', ' ', text)
     return text.strip()
 
 def format_script_text(text: str) -> str:
