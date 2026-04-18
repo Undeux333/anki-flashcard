@@ -150,6 +150,7 @@ MANDATORY RULES:
 1. FLAPPING (ɾ): Any /t/ or /d/ surrounded by vowels or sonorants → ɾ
    Applies ACROSS word boundaries without exception.
    Pattern: [vowel/sonorant] + t/d + [vowel/sonorant] → ɾ
+   Exceptions — never flap: t before s (it's → ɪts), t before ð (but the → bətðə), t after s, t in clusters
 
 2. VOWEL REDUCTION: All unstressed function words → weakest form (schwa or dropped)
    Pattern: short grammatical words in unstressed position → ə or weaker
@@ -165,7 +166,7 @@ MANDATORY RULES:
    Pattern: consonant-final + vowel-initial → merge
    Pattern: t/d + j across boundary → tʃ/dʒ
 
-ANCHOR EXAMPLES (illustrate rule application, not word lists):
+CONNECTED SPEECH ANCHOR EXAMPLES:
 - about taking → baʊɾeɪkɪn  [flap across boundary + g-drop]
 - did you → dɪdʒu  [palatalization]
 - could you → kədʒu  [reduction + palatalization]
@@ -177,42 +178,62 @@ ANCHOR EXAMPLES (illustrate rule application, not word lists):
 - going to → ɡənə  [reduction]
 - want to → wɑnə  [reduction]
 
-FLAPPING EXCEPTIONS (never flap in these environments):
-- t before s: "it's" → ɪts (NOT ɪɾs)
-- t before ð: "but the" → bətðə (NOT bəɾðə)
-- t after s: "just" → dʒʌst
-- t in clusters: "next" → nɛkst
+STRESS ALGORITHM (apply in this order):
 
-STRESS AND RHYTHM:
-Mark primary stress with ' before the stressed syllable.
-Use stress marks to show natural rhythm grouping in longer phrases.
-Examples:
-- probably like an hour → 'prɑbli 'laɪkən 'aʊər
-- when you get a chance → wɛnjə'ɡɛɾə'tʃæns
-- really long → 'rɪli'lɔŋ
+STEP 1 — Remove stress from function words (never stressed):
+  articles (the, a, an), prepositions (of, for, to, at, in, on),
+  conjunctions (and, but, or), pronouns (I, you, he, she, we, they, it),
+  auxiliaries (is, am, are, was, were, have, has, do, does)
+
+STEP 2 — Identify content words as stress candidates:
+  nouns, main verbs, adjectives, adverbs
+
+STEP 3 — Find the "new information" (most important):
+  What is the speaker trying to convey?
+  What does the listener not yet know?
+  What is the problem, conclusion, or evaluation?
+  → This gets the strongest stress (')
+
+STEP 4 — Place strongest stress ' on the most important new information.
+  Important information tends to come late in the sentence,
+  but stress follows importance, NOT position.
+
+STEP 5 — Give lighter stress to other content words.
+  Already-known or less critical content words get weak or no stress.
+
+KEY STRESS RULES:
+- Stress marks information priority, not word class alone
+- Adjective + noun: the NOUN is typically stronger (really LONG)
+- Function words are NEVER stressed unless contrastively emphasized
+- Do NOT stress every content word — only the most important ones
+- Existing information (already mentioned) gets weaker stress than new information
+
+CHUNK BOUNDARIES:
+Use | only where a native speaker would naturally take a brief pause or breath.
+Place | at natural phrase boundaries, not mechanically by word count.
 
 FORMAT:
 - CRITICAL: Keep ALL punctuation from the original (. , ? !) — never drop them
 - Space after , and .
 - No space before ? or !
-- Use American English IPA only (ɑ not ɒ, ɛ not e)
 - Use ɹ for the English r sound, never r
 - Use ː for long vowels where appropriate (e.g. uː in commute, iː in need)
 - Use ' before stressed syllables
-- Use | only where a native speaker would naturally take a brief pause or breath in casual speech.
+- No ˈ, no *, no annotations
 
 STRESS AND CHUNK EXAMPLES:
 - I'm still on the fence about taking the job. → aɪm'stɪlɑnðə'fɛns | ə'baʊɾeɪkɪnðə'dʒɑb.
-- probably like an hour and a half each way → 'pɹɑbli'laɪkən | 'aʊərənə'hæf | 'ɪtʃ'weɪ.
 - The pay's great, but the commute's gonna be really long. → ðə'peɪz'ɡɹeɪt, | bətðəkə'mjuːts | 'ɡənəbi'ɹɪli'lɔŋ.
+- probably like an hour and a half each way → 'pɹɑbli'laɪkən | 'aʊərənə'hæf | 'ɪtʃ'weɪ.
 - Yeah, that's rough. That'll wear you out. → jə, 'ðæts'ɹʌf. 'ðæɾəl | 'wɛɹju'aʊt.
 
 SELF-CHECK (apply before output):
 - Every t/d between vowels/sonorants → ɾ including across word boundaries?
 - t before s or ð → never flapped?
-- All unstressed function words fully reduced?
+- Function words unstressed?
+- Strongest stress on the most important NEW information?
+- Adjective+noun: noun gets stronger stress?
 - ALL punctuation from original preserved?
-- Stress marks ' added to show rhythm?
 - Sounds like fast casual speech, not careful reading?
 
 CRITICAL RULE:
