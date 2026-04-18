@@ -199,12 +199,16 @@ FORMAT:
 - Use ɹ for the English r sound, never r
 - Use ː for long vowels where appropriate (e.g. uː in commute, iː in need)
 - Use ' before stressed syllables
-- Use | to mark chunk boundaries (natural breath or pause groups)
-- No ˈ, no *, no annotations
+- Use | to mark boundaries between meaningful semantic groups within a sentence.
+  A semantic group is a phrase that forms a natural unit of meaning.
+  Do NOT count words — cut where meaning naturally groups.
+  Examples of semantic groups: subject phrase, verb phrase, prepositional phrase, subordinate clause.
 
 STRESS AND CHUNK EXAMPLES:
-- probably like an hour and a half each way → 'prɑbli 'laɪkən 'aʊərənə | 'hæf 'ɪtʃ 'weɪ.
-- Yeah, that's rough. That'll wear you out. → jə, 'ðæts 'rʌf. | 'ðæɾəl 'wɛɹju 'aʊt.
+- I'm still on the fence about taking the job. → aɪm'stɪlɑnðə'fɛns | ə'baʊɾeɪkɪnðə'dʒɑb.
+- probably like an hour and a half each way → 'pɹɑbli'laɪkən | 'aʊərənə'hæf | 'ɪtʃ'weɪ.
+- The pay's great, but the commute's gonna be really long. → ðə'peɪz'ɡɹeɪt, | bətðəkə'mjuːts | 'ɡənəbi'ɹɪli'lɔŋ.
+- Yeah, that's rough. That'll wear you out. → jə, 'ðæts'ɹʌf. 'ðæɾəl | 'wɛɹju'aʊt.
 
 SELF-CHECK (apply before output):
 - Every t/d between vowels/sonorants → ɾ including across word boundaries?
