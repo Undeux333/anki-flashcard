@@ -238,6 +238,7 @@ Use | only where a native speaker would naturally take a brief pause or breath.
 Place | at natural phrase boundaries, not mechanically by word count.
 
 FORMAT:
+- CRITICAL: Convert the ENTIRE phrase to IPA, including all sentences. Never stop at a period mid-phrase.
 - CRITICAL: Keep ALL punctuation from the original (. , ? !) — never drop them
 - Space after , and .
 - No space before ? or !
