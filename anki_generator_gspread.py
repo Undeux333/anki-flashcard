@@ -48,8 +48,8 @@ CARD_CSS = """
 audio { display: none; }
 .replay-button { display: none; }
 .main-btn-wrap { display: flex; justify-content: center; margin-top: 20px; }
-.main-btn { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 14px 32px; background: #2d3748; border-radius: 12px; cursor: pointer; border: none; }
-.main-btn-text { font-size: 15px; font-weight: bold; color: #fff; }
+.main-btn { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 14px 32px; background: transparent; border-radius: 12px; cursor: pointer; border: 0.5px solid #666; }
+.main-btn-text { font-size: 15px; font-weight: bold; color: #aaa; }
 
 /* ── 表面: チャット風レイアウト ── */
 .conv { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
@@ -73,13 +73,13 @@ audio { display: none; }
 .bubble b { color: #000; font-weight: bold; }
 .bubble u { text-decoration: underline; text-underline-offset: 4px; }
 .action-row { display: flex; align-items: center; gap: 6px; margin-top: 5px; }
-.explain-btn { font-size: 11px; color: #2b6cb0; cursor: pointer; font-weight: bold; padding: 4px 9px; border-radius: 10px; white-space: nowrap; border: 1px solid #bee3f8; background: #ebf4ff; }
-.script-icon-btn { font-size: 14px; cursor: pointer; padding: 3px 7px; border-radius: 8px; border: 1px solid #bee3f8; background: #ebf4ff; line-height: 1.4; }
-.script-icon-btn.on { background: #2b6cb0; border-color: #2b6cb0; }
-.ipa-btn { font-size: 11px; color: #553c9a; cursor: pointer; font-weight: bold; padding: 4px 9px; border-radius: 10px; white-space: nowrap; border: 1px solid #d6bcfa; background: #f5f0ff; }
-.ipa-btn.active { background: #553c9a; color: #fff; border-color: #553c9a; }
-.slow-btn { font-size: 11px; color: #4a5568; cursor: pointer; font-weight: bold; padding: 4px 9px; background: #f7fafc; border-radius: 10px; white-space: nowrap; border: 1px solid #e2e8f0; }
-.play-line-btn { font-size: 11px; color: #4a5568; cursor: pointer; font-weight: bold; padding: 4px 9px; background: #f7fafc; border-radius: 10px; white-space: nowrap; border: 1px solid #e2e8f0; }
+.explain-btn { font-size: 11px; color: #aaa; cursor: pointer; font-weight: bold; padding: 4px 9px; border-radius: 10px; white-space: nowrap; border: 0.5px solid #666; background: transparent; }
+.script-icon-btn { font-size: 14px; cursor: pointer; padding: 3px 7px; border-radius: 8px; border: 0.5px solid #666; background: transparent; color: #aaa; line-height: 1.4; }
+.script-icon-btn.on { background: #444; border-color: #666; }
+.ipa-btn { font-size: 11px; color: #aaa; cursor: pointer; font-weight: bold; padding: 4px 9px; border-radius: 10px; white-space: nowrap; border: 0.5px solid #666; background: transparent; }
+.ipa-btn.active { background: #444; color: #fff; border-color: #666; }
+.slow-btn { font-size: 11px; color: #aaa; cursor: pointer; font-weight: bold; padding: 4px 9px; background: transparent; border-radius: 10px; white-space: nowrap; border: 0.5px solid #666; }
+.play-line-btn { font-size: 11px; color: #aaa; cursor: pointer; font-weight: bold; padding: 4px 9px; background: transparent; border-radius: 10px; white-space: nowrap; border: 0.5px solid #666; }
 .explain-box { margin-top: 5px; background: #ebf4ff; border-left: 3px solid #4299e1; border-radius: 0 8px 8px 0; padding: 9px 12px; font-size: 13px; color: #2c5282; font-style: italic; line-height: 1.55; display: none; }
 .rl { font-size: 10px; font-weight: bold; padding: 2px 8px; border-radius: 10px; }
 .rn { background: #e8f4fd; color: #1d6fa4; }
@@ -525,12 +525,12 @@ def build_back(speech_lines, s_files, m_files, meanings, b_fn, ipa_list):
 
     return (
         f'<div class="ep-back">'
-        f'<div style="margin-bottom:10px"><span class="rl rn">&#9679; Script &amp; Explain</span></div>'
+        f''
         f'{rows}'
         f'<div class="main-btn-wrap">'
         f'<div class="main-btn" onclick="document.getElementById(\'ba1\').play()">'
         f'<span style="font-size:18px;">&#128266;</span>'
-        f'<span class="main-btn-text">Play all</span>'
+        f'<span class="main-btn-text">Play All</span>'
         f'<audio id="ba1" src="{b_fn}"></audio>'
         f'</div>'
         f'</div>'
