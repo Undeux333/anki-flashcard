@@ -66,13 +66,16 @@ audio { display: none; }
 .explain-btn { font-size: 11px; color: #2b6cb0; cursor: pointer; font-weight: bold; padding: 4px 9px; border-radius: 10px; white-space: nowrap; border: 1px solid #bee3f8; background: #ebf4ff; }
 .script-icon-btn { font-size: 14px; cursor: pointer; padding: 3px 7px; border-radius: 8px; border: 1px solid #bee3f8; background: #ebf4ff; line-height: 1.4; }
 .script-icon-btn.on { background: #2b6cb0; border-color: #2b6cb0; }
+.ipa-btn { font-size: 11px; color: #553c9a; cursor: pointer; font-weight: bold; padding: 4px 9px; border-radius: 10px; white-space: nowrap; border: 1px solid #d6bcfa; background: #f5f0ff; }
+.ipa-btn.active { background: #553c9a; color: #fff; border-color: #553c9a; }
 .slow-btn { font-size: 11px; color: #4a5568; cursor: pointer; font-weight: bold; padding: 4px 9px; background: #f7fafc; border-radius: 10px; white-space: nowrap; border: 1px solid #e2e8f0; }
 .play-line-btn { font-size: 11px; color: #4a5568; cursor: pointer; font-weight: bold; padding: 4px 9px; background: #f7fafc; border-radius: 10px; white-space: nowrap; border: 1px solid #e2e8f0; }
 .explain-box { margin-top: 5px; background: #ebf4ff; border-left: 3px solid #4299e1; border-radius: 0 8px 8px 0; padding: 9px 12px; font-size: 13px; color: #2c5282; font-style: italic; line-height: 1.55; display: none; }
 .rl { font-size: 10px; font-weight: bold; padding: 2px 8px; border-radius: 10px; }
 .rn { background: #e8f4fd; color: #1d6fa4; }
 .bubble-wrap { display: inline-flex; flex-direction: column; align-items: flex-start; flex: 1; }
-.ipa-wrap { display: flex; justify-content: flex-end; margin-top: 4px; }
+.ipa-wrap { display: none; justify-content: flex-end; margin-top: 4px; }
+.ipa-wrap.open { display: flex; }
 .ipa-row { display: inline-block; padding: 5px 10px; background: #2d3748; border: 0.5px solid #4a5568; border-radius: 8px; font-size: 18px; line-height: 1.9; letter-spacing: 0.2px; color: #e2e8f0; font-family: serif; }
 .ipa-row.predict { border: 1.5px solid #f6c026; }
 """
@@ -392,7 +395,7 @@ def apply_ipa_rules(text: str) -> str:
 
 
 def format_ipa(ipa_text: str) -> str:
-    """*...* マークを除去し、スペースを正規化して返す"""
+    """チャンク区切り(|)を除去し、スペースを正規化して返す"""
     if not ipa_text:
         return ""
     # *...* マークを除去
@@ -403,19 +406,18 @@ def format_ipa(ipa_text: str) -> str:
     text = text.replace('ˈ', '')
     # ルールベース後処理
     text = apply_ipa_rules(text)
-    # | の前後スペースを一時的に保護
-    text = text.replace(' | ', '§CHUNK§')
-    text = text.replace('| ', '§CHUNK§')
-    text = text.replace(' |', '§CHUNK§')
-    text = text.replace('|', '§CHUNK§')
+    # チャンク区切り | を削除
+    text = text.replace(' | ', ' ')
+    text = text.replace('| ', ' ')
+    text = text.replace(' |', ' ')
+    text = text.replace('|', '')
     # 全スペースを削除
     text = text.replace(' ', '')
     # , と . の後にスペースを追加
     text = re.sub(r'([,\.])(?=[^\s])', r'\1 ', text)
     # - の前後にスペースを追加
     text = re.sub(r'\s*-\s*', ' - ', text)
-    # | を復元（前後にスペース）、多重スペースを正規化
-    text = text.replace('§CHUNK§', ' | ')
+    # 多重スペースを正規化
     text = re.sub(r' {2,}', ' ', text)
     return text.strip()
 
@@ -474,7 +476,7 @@ def build_back(speech_lines, s_files, m_files, meanings, b_fn, ipa_list):
         ipa_html = ""
         if ipa:
             ipa_html = (
-                f'<div class="ipa-wrap">'
+                f'<div class="ipa-wrap" id="iw{idx}">'
                 f'<div class="{ipa_class}">{format_ipa(ipa)}</div>'
                 f'</div>'
             )
@@ -489,6 +491,7 @@ def build_back(speech_lines, s_files, m_files, meanings, b_fn, ipa_list):
             f'<div class="action-row">'
             f'<div class="explain-btn" onclick="document.getElementById(\'m{idx}\').play()">&#128266; Explain</div>'
             f'<div class="script-icon-btn" onclick="epToggle(this,\'ex{idx}\')">&#128196;</div>'
+            f'<div class="ipa-btn" id="ib{idx}" onclick="epIpa(\'iw{idx}\',\'ib{idx}\')">IPA</div>'
             f'<div class="slow-btn" onclick="epSlow(\'s{idx}\')">&#128034; Slow</div>'
             f'<div class="play-line-btn" onclick="epPlay(\'s{idx}\')">&#128266; Play</div>'
             f'<audio id="m{idx}" src="{m_files[idx]}"></audio>'
@@ -512,6 +515,14 @@ def build_back(speech_lines, s_files, m_files, meanings, b_fn, ipa_list):
         'function epSlow(id){'
         'var a=document.getElementById(id);'
         'a.playbackRate=0.5;a.play();'
+        '}'
+        'function epIpa(boxId,btnId){'
+        'var box=document.getElementById(boxId);'
+        'var btn=document.getElementById(btnId);'
+        'if(!box)return;'
+        'var open=box.classList.contains("open");'
+        'if(open){box.classList.remove("open");btn.classList.remove("active");}'
+        'else{box.classList.add("open");btn.classList.add("active");}'
         '}'
         '</script>'
     )
