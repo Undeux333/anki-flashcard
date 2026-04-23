@@ -43,7 +43,7 @@ CONV_VOICES = {
 }
 
 CARD_CSS = """
-.card { font-family: sans-serif; background: #f4f6f9; text-align: left; }
+.card { font-family: sans-serif; background: #1a1a1a; text-align: left; }
 .ep-front, .ep-back { max-width: 550px; margin: auto; padding: 20px; }
 audio { display: none; }
 .replay-button { display: none; }
@@ -55,11 +55,10 @@ audio { display: none; }
 .conv { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
 .conv-row-a { display: flex; justify-content: flex-start; }
 .conv-row-b { display: flex; justify-content: flex-end; }
-.conv-bar { min-width: 48px; max-width: 88%; }
-.conv-bar-a { height: 38px; border-radius: 4px 14px 14px 14px; background: #edf2f7; border: 1px solid #e2e8f0; }
-.conv-bar-b { height: 38px; border-radius: 14px 4px 14px 14px; background: #e9f5ee; border: 1px solid #c6f6d5; }
-.conv-bar-tall { height: 56px; }
-.conv-predict { border-radius: 14px 4px 14px 14px; background: #fffbeb; border: 1.5px solid #f6c026; max-width: 88%; display: inline-flex; align-items: center; padding: 6px 12px; gap: 7px; font-size: 12px; color: #4a5568; }
+.conv-bar { height: 38px; min-width: 48px; max-width: 88%; }
+.conv-bar-a { border-radius: 4px 14px 14px 14px; background: #fdf6e3; border: 1px solid #e8d9b5; }
+.conv-bar-b { border-radius: 14px 4px 14px 14px; background: #fdf6e3; border: 1px solid #e8d9b5; }
+.conv-predict { border-radius: 14px 4px 14px 14px; background: #fdf6e3; border: 1.5px solid #48bb78; max-width: 88%; display: inline-flex; align-items: center; padding: 6px 12px; gap: 7px; font-size: 12px; color: #2d3748; }
 
 /* ── 裏面: チャット風レイアウト ── */
 .line-block { display: flex; flex-direction: column; margin-bottom: 10px; }
@@ -68,9 +67,9 @@ audio { display: none; }
 .bubble-wrap { max-width: 88%; display: inline-flex; flex-direction: column; align-items: flex-start; }
 .line-block.sp-b .bubble-wrap { align-items: flex-end; }
 .bubble { background: #edf2f7; border: 0.5px solid #e2e8f0; padding: 10px 14px; font-size: 15px; line-height: 1.5; color: #2d3748; }
-.sp-a .bubble { border-radius: 4px 14px 14px 14px; background: #edf2f7; border: 0.5px solid #e2e8f0; }
-.sp-b .bubble { border-radius: 14px 4px 14px 14px; background: #e9f5ee; border: 0.5px solid #c6f6d5; }
-.bubble.predict { border: 1.5px solid #f6c026; background: #fffbeb; }
+.sp-a .bubble { border-radius: 4px 14px 14px 14px; background: #fdf6e3; border: 0.5px solid #e8d9b5; }
+.sp-b .bubble { border-radius: 14px 4px 14px 14px; background: #fdf6e3; border: 0.5px solid #e8d9b5; }
+.bubble.predict { border: 1.5px solid #48bb78; background: #d4f5e2; }
 .bubble b { color: #000; font-weight: bold; }
 .bubble u { text-decoration: underline; text-underline-offset: 4px; }
 .action-row { display: flex; align-items: center; gap: 6px; margin-top: 5px; }
@@ -87,7 +86,7 @@ audio { display: none; }
 .ipa-wrap { display: none; justify-content: flex-end; margin-top: 4px; }
 .ipa-wrap.open { display: flex; }
 .ipa-row { display: inline-block; padding: 5px 10px; background: #2d3748; border: 0.5px solid #4a5568; border-radius: 8px; font-size: 18px; line-height: 1.9; letter-spacing: 0.2px; color: #e2e8f0; font-family: serif; }
-.ipa-row.predict { border: 1.5px solid #f6c026; }
+.ipa-row.predict { border: 1.5px solid #48bb78; }
 """
 
 # ═══════════════════════════════════════════════
@@ -441,10 +440,9 @@ def build_front(f_fn, speech_lines, hints):
         else:
             w = _bar_width_ch(line['text'])
             bar_cls = "conv-bar-a" if sp == "A" else "conv-bar-b"
-            tall = " conv-bar-tall" if len(line['text'].strip()) > 40 else ""
             rows += (
                 f'<div class="{row_class}">'
-                f'<div class="conv-bar {bar_cls}{tall}" style="width:min({w}ch,88%)"></div>'
+                f'<div class="conv-bar {bar_cls}" style="width:min({w}ch,88%)"></div>'
                 f'</div>'
             )
 
