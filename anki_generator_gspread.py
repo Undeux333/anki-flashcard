@@ -50,19 +50,30 @@ audio { display: none; }
 .main-btn-wrap { display: flex; justify-content: center; margin-top: 20px; }
 .main-btn { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 14px 32px; background: #2d3748; border-radius: 12px; cursor: pointer; border: none; }
 .main-btn-text { font-size: 15px; font-weight: bold; color: #fff; }
-.conv { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
-.conv-row { display: flex; align-items: center; gap: 0px; }
-.conv-speaker { font-size: 12px; font-weight: bold; color: #718096; flex-shrink: 0; }
-.conv-bar { height: 38px; border-radius: 8px; background: #edf2f7; border: 1px solid #e2e8f0; flex: 1; }
-.conv-predict { min-height: 38px; border-radius: 8px; background: #edf2f7; border: 1.5px solid #f6c026; flex: 1; display: flex; align-items: center; padding: 6px 12px; gap: 7px; font-size: 12px; color: #4a5568; }
-.line-block { margin-bottom: 10px; }
-.line-row { display: flex; align-items: center; gap: 0px; }
-.back-speaker { font-size: 12px; font-weight: bold; color: #718096; flex-shrink: 0; }
-.bubble { flex: 1; background: #fff; border: 0.5px solid #e2e8f0; border-radius: 10px; padding: 10px 14px; font-size: 15px; line-height: 1.5; color: #2d3748; }
-.bubble.predict { border: 1.5px solid #f6c026; }
+
+/* ── 表面: チャット風レイアウト ── */
+.conv { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.conv-row-a { display: flex; justify-content: flex-start; }
+.conv-row-b { display: flex; justify-content: flex-end; }
+.conv-bar { min-width: 48px; max-width: 88%; }
+.conv-bar-a { height: 38px; border-radius: 4px 14px 14px 14px; background: #edf2f7; border: 1px solid #e2e8f0; }
+.conv-bar-b { height: 38px; border-radius: 14px 4px 14px 14px; background: #e9f5ee; border: 1px solid #c6f6d5; }
+.conv-bar-tall { height: 56px; }
+.conv-predict { border-radius: 14px 4px 14px 14px; background: #fffbeb; border: 1.5px solid #f6c026; max-width: 88%; display: inline-flex; align-items: center; padding: 6px 12px; gap: 7px; font-size: 12px; color: #4a5568; }
+
+/* ── 裏面: チャット風レイアウト ── */
+.line-block { display: flex; flex-direction: column; margin-bottom: 10px; }
+.line-block.sp-a { align-items: flex-start; }
+.line-block.sp-b { align-items: flex-end; }
+.bubble-wrap { max-width: 88%; display: inline-flex; flex-direction: column; align-items: flex-start; }
+.line-block.sp-b .bubble-wrap { align-items: flex-end; }
+.bubble { background: #edf2f7; border: 0.5px solid #e2e8f0; padding: 10px 14px; font-size: 15px; line-height: 1.5; color: #2d3748; }
+.sp-a .bubble { border-radius: 4px 14px 14px 14px; background: #edf2f7; border: 0.5px solid #e2e8f0; }
+.sp-b .bubble { border-radius: 14px 4px 14px 14px; background: #e9f5ee; border: 0.5px solid #c6f6d5; }
+.bubble.predict { border: 1.5px solid #f6c026; background: #fffbeb; }
 .bubble b { color: #000; font-weight: bold; }
 .bubble u { text-decoration: underline; text-underline-offset: 4px; }
-.action-row { display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin-top: 5px; }
+.action-row { display: flex; align-items: center; gap: 6px; margin-top: 5px; }
 .explain-btn { font-size: 11px; color: #2b6cb0; cursor: pointer; font-weight: bold; padding: 4px 9px; border-radius: 10px; white-space: nowrap; border: 1px solid #bee3f8; background: #ebf4ff; }
 .script-icon-btn { font-size: 14px; cursor: pointer; padding: 3px 7px; border-radius: 8px; border: 1px solid #bee3f8; background: #ebf4ff; line-height: 1.4; }
 .script-icon-btn.on { background: #2b6cb0; border-color: #2b6cb0; }
@@ -73,7 +84,6 @@ audio { display: none; }
 .explain-box { margin-top: 5px; background: #ebf4ff; border-left: 3px solid #4299e1; border-radius: 0 8px 8px 0; padding: 9px 12px; font-size: 13px; color: #2c5282; font-style: italic; line-height: 1.55; display: none; }
 .rl { font-size: 10px; font-weight: bold; padding: 2px 8px; border-radius: 10px; }
 .rn { background: #e8f4fd; color: #1d6fa4; }
-.bubble-wrap { display: inline-flex; flex-direction: column; align-items: flex-start; flex: 1; }
 .ipa-wrap { display: none; justify-content: flex-end; margin-top: 4px; }
 .ipa-wrap.open { display: flex; }
 .ipa-row { display: inline-block; padding: 5px 10px; background: #2d3748; border: 0.5px solid #4a5568; border-radius: 8px; font-size: 18px; line-height: 1.9; letter-spacing: 0.2px; color: #e2e8f0; font-family: serif; }
@@ -118,7 +128,6 @@ def generate_content(client, speech_lines: list) -> dict:
 
     hidden_indices = [i for i, l in enumerate(speech_lines) if l['hidden']]
 
-    # 隠しフレーズごとに「正解フレーズ」と「それより前の文脈」を構築
     hidden_hints_info = ""
     for idx in hidden_indices:
         hidden_phrase = clean_for_gemini(speech_lines[idx]['text'])
@@ -333,7 +342,6 @@ async def process_audio(speech_lines: list, meanings: list, uid: str, tmpdir: st
     last_idx = len(speech_lines) - 1
 
     for idx, line in enumerate(speech_lines):
-        # ()を除去し、@...@で囲まれた部分もTTSから除去
         clean_text = re.sub(r'\(|\)', '', line['text'])
         clean_text = re.sub(r'\+\+[^+]*\+\+', '', clean_text).strip()
         clean_text = re.sub(r'_([^_]+)_', r'\1', clean_text).strip()
@@ -347,14 +355,12 @@ async def process_audio(speech_lines: list, meanings: list, uid: str, tmpdir: st
         seg = AudioSegment.from_file(io.BytesIO(s_data), format="mp3")
         trailing = AudioSegment.silent(duration=200) if idx < last_idx else AudioSegment.empty()
 
-        # 表面用: 非表示行は最初・最後を除き無音に置き換え
         if line['hidden']:
             if idx > 0 and idx < last_idx:
                 front_audio += AudioSegment.silent(duration=len(seg)) + trailing
         else:
             front_audio += seg + trailing
 
-        # 裏面用: 全行を均一なポーズで結合
         back_audio += seg + trailing
 
         m_data = await _tts_bytes(meanings[idx], CONV_VOICES["B"])
@@ -369,24 +375,16 @@ async def process_audio(speech_lines: list, meanings: list, uid: str, tmpdir: st
     return f_fn, b_fn, s_files, m_files
 
 def apply_ipa_rules(text: str) -> str:
-    """ルールベースのIPA後処理"""
-    # 英国英語母音 → 米国英語
     text = text.replace('ɒ', 'ɑ')
-    # yeah: jæ → jə
     text = re.sub(r"jæ(?=[,\.\?\!\s']|$)", 'jə', text)
-    # but → bə（文末除外）
     text = re.sub(r'(bʌt|bət)(?![,\.\?\!])', 'bə', text)
-    # and: ənd → ən（d脱落）
     text = re.sub(r'ənd', 'ən', text)
-    # of: ʌv / ɔv → əv
     text = re.sub(r'[ʌɔ]v(?=[^aeiouæɑɛɪɔʊə]|$)', 'əv', text)
-    # r → ɹ（ɾは除外）
     text = re.sub(r'(?<![ɾ])r(?![ɾ])', 'ɹ', text)
     text = re.sub(r'ɾ(?=s)', 't', text)
     text = re.sub(r'ɾ(?=ð)', 't', text)
     text = re.sub(r'ɾ(?=n)', 't', text)
     text = re.sub(r'ɾ(?=l)', 't', text)
-    # フラッピング: 母音に挟まれたt → ɾ
     vowels = 'aeiouæɑɛɪɔʊəɾʌ'
     sonorants = 'mnŋlr'
     text = re.sub(f'(?<=[{vowels}{sonorants}])t(?=[{vowels}])', 'ɾ', text)
@@ -395,29 +393,19 @@ def apply_ipa_rules(text: str) -> str:
 
 
 def format_ipa(ipa_text: str) -> str:
-    """チャンク区切り(|)を除去し、スペースを正規化して返す"""
     if not ipa_text:
         return ""
-    # *...* マークを除去
     text = re.sub(r'\*([^*]*)\*', r'\1', ipa_text)
-    # 残った単独の * を除去
     text = text.replace('*', '')
-    # ˈ を除去
     text = text.replace('ˈ', '')
-    # ルールベース後処理
     text = apply_ipa_rules(text)
-    # チャンク区切り | を削除
     text = text.replace(' | ', ' ')
     text = text.replace('| ', ' ')
     text = text.replace(' |', ' ')
     text = text.replace('|', '')
-    # 全スペースを削除
     text = text.replace(' ', '')
-    # , と . の後にスペースを追加
     text = re.sub(r'([,\.])(?=[^\s])', r'\1 ', text)
-    # - の前後にスペースを追加
     text = re.sub(r'\s*-\s*', ' - ', text)
-    # 多重スペースを正規化
     text = re.sub(r' {2,}', ' ', text)
     return text.strip()
 
@@ -428,25 +416,35 @@ def format_script_text(text: str) -> str:
     t = re.sub(r'\+\+([^+]*)\+\+', r'<span style="color:#a0aec0;font-size:12px;font-style:italic;">\1</span>', t)
     return t.replace("\n", "<br>")
 
+def _bar_width_ch(text: str) -> int:
+    """マークアップを除いた実質文字数をch単位の幅として返す（上限40）"""
+    clean = re.sub(r'\+\+[^+]*\+\+', '', text)
+    clean = re.sub(r'_([^_]+)_', r'\1', clean)
+    clean = re.sub(r'\(.*?\)', '', clean)
+    return min(len(clean.strip()), 40)
+
 def build_front(f_fn, speech_lines, hints):
     rows = ""
     for idx, line in enumerate(speech_lines):
         sp = line['speaker']
+        row_class = "conv-row-a" if sp == "A" else "conv-row-b"
+
         if line['hidden']:
             hint_text = hints[idx] if hints and idx < len(hints) and hints[idx] else None
             if hint_text is None:
                 raise ValueError(f"hint missing for hidden line {idx}: {line['text']}")
             rows += (
-                f'<div class="conv-row">'
-                f'<span class="conv-speaker">{sp}:</span>'
-                f'<div class="conv-predict"><span style="font-size:14px;">&#127919;</span>{hint_text}</div>'
+                f'<div class="{row_class}">'
+                f'<div class="conv-predict"><span style="font-size:13px;">&#127919;</span>{hint_text}</div>'
                 f'</div>'
             )
         else:
+            w = _bar_width_ch(line['text'])
+            bar_cls = "conv-bar-a" if sp == "A" else "conv-bar-b"
+            tall = " conv-bar-tall" if len(line['text'].strip()) > 40 else ""
             rows += (
-                f'<div class="conv-row">'
-                f'<span class="conv-speaker">{sp}:</span>'
-                f'<div class="conv-bar"></div>'
+                f'<div class="{row_class}">'
+                f'<div class="conv-bar {bar_cls}{tall}" style="width:min({w}ch,88%)"></div>'
                 f'</div>'
             )
 
@@ -471,6 +469,7 @@ def build_back(speech_lines, s_files, m_files, meanings, b_fn, ipa_list):
         sp   = line['speaker']
         mt   = meanings[idx]
         ipa  = ipa_list[idx] if idx < len(ipa_list) else ""
+        sp_class = "sp-a" if sp == "A" else "sp-b"
         bubble_class = "bubble predict" if line['hidden'] else "bubble"
         ipa_class = "ipa-row predict" if line['hidden'] else "ipa-row"
         ipa_html = ""
@@ -481,13 +480,11 @@ def build_back(speech_lines, s_files, m_files, meanings, b_fn, ipa_list):
                 f'</div>'
             )
         rows += (
-            f'<div class="line-block">'
-            f'<div class="line-row">'
-            f'<span class="back-speaker">{sp}:</span>'
-            f'<div class="bubble-wrap"><div class="{bubble_class}">{disp}</div></div>'
-            f'<audio id="s{idx}" src="{s_files[idx]}"></audio>'
-            f'</div>'
+            f'<div class="line-block {sp_class}">'
+            f'<div class="bubble-wrap">'
+            f'<div class="{bubble_class}">{disp}</div>'
             f'{ipa_html}'
+            f'</div>'
             f'<div class="action-row">'
             f'<div class="explain-btn" onclick="document.getElementById(\'m{idx}\').play()">&#128266; Explain</div>'
             f'<div class="script-icon-btn" onclick="epToggle(this,\'ex{idx}\')">&#128196;</div>'
@@ -495,6 +492,7 @@ def build_back(speech_lines, s_files, m_files, meanings, b_fn, ipa_list):
             f'<div class="slow-btn" onclick="epSlow(\'s{idx}\')">&#128034; Slow</div>'
             f'<div class="play-line-btn" onclick="epPlay(\'s{idx}\')">&#128266; Play</div>'
             f'<audio id="m{idx}" src="{m_files[idx]}"></audio>'
+            f'<audio id="s{idx}" src="{s_files[idx]}"></audio>'
             f'</div>'
             f'<div class="explain-box" id="ex{idx}"><i>{mt}</i></div>'
             f'</div>'
@@ -555,7 +553,7 @@ def get_sheet():
 def get_pending_phrases(sheet):
     rows = sheet.get_all_values()
     pending = []
-    for i, row in enumerate(rows[1:], start=2):  # ヘッダーをスキップ、行番号は2始まり
+    for i, row in enumerate(rows[1:], start=2):
         if len(row) < COL_STATUS:
             continue
         status = row[COL_STATUS - 1].strip()
@@ -603,7 +601,7 @@ def main():
     )
     deck = genanki.Deck(ANKI_DECK_ID, "English Phrases (Auto)")
     all_media = []
-    done_rows = []  # リリースURL記録用
+    done_rows = []
 
     with tempfile.TemporaryDirectory() as tmpdir:
         for i, item in enumerate(pending, 1):
@@ -655,7 +653,6 @@ def main():
             pkg.write_to_file(str(final_name))
             print(f"📦 生成完了: {final_name}")
 
-            # 成功済み行に Generated At を記録
             if done_rows:
                 from zoneinfo import ZoneInfo
                 generated_at = datetime.now(ZoneInfo("Asia/Tokyo")).strftime("%Y-%m-%d %H:%M")
@@ -665,7 +662,6 @@ def main():
                     except Exception as e:
                         print(f"⚠️  Generated At 更新失敗 (row {row}): {e}")
 
-                # ワークフローが Release URL を記録するために行番号を保存
                 done_pages_path = output_path / "done_pages.json"
                 done_pages_path.write_text(json.dumps(done_rows))
 
