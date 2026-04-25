@@ -4,7 +4,6 @@ from pathlib import Path
 from datetime import datetime
 from google import genai
 from google.genai import types
-import edge_tts
 import genanki
 import gspread
 from google.oauth2.service_account import Credentials
@@ -17,7 +16,6 @@ GEMINI_API_KEY   = os.environ.get("GEMINI_API_KEY", "")
 SPREADSHEET_ID   = os.environ.get("SPREADSHEET_ID", "")
 GOOGLE_CREDS_JSON = os.environ.get("GOOGLE_CREDENTIALS", "")
 GEMINI_MODEL     = "gemini-3.1-flash-lite-preview"
-TTS_RATE         = "+0%"
 
 # スプレッドシート列定義（1始まり）
 COL_INDEX        = 1  # A
@@ -38,9 +36,12 @@ ANKI_DECK_ID  = 2059400110
 FORCE_REGEN   = os.environ.get("FORCE_REGEN", "false").lower() == "true"
 
 CONV_VOICES = {
-    "A": "en-US-BrianNeural",
-    "B": "en-US-AvaMultilingualNeural",
+    "A": "Charon",   # 男性
+    "B": "Zephyr",   # 女性
 }
+
+# グローバルクライアント（_tts_bytes から参照するため）
+client = genai.Client(api_key=GEMINI_API_KEY)
 
 CARD_CSS = """
 .card { font-family: sans-serif; background: #1a1a1a; text-align: left; }
@@ -315,23 +316,35 @@ Return ONLY valid JSON:
     raise RuntimeError("503 generate_content failed after all retries")
 
 async def _tts_bytes(text, voice, retries=3):
-    import asyncio as _asyncio
+    """Gemini TTS で音声データを生成して返す"""
     last_err = None
     for attempt in range(retries):
         try:
-            communicate = edge_tts.Communicate(text, voice=voice, rate=TTS_RATE)
-            data = b""
-            async for chunk in communicate.stream():
-                if chunk["type"] == "audio":
-                    data += chunk["data"]
+            response = client.models.generate_content(
+                model="gemini-3.1-flash-tts-preview",
+                contents=text,
+                config=types.GenerateContentConfig(
+                    response_modalities=["AUDIO"],
+                    speech_config=types.SpeechConfig(
+                        voice_config=types.VoiceConfig(
+                            prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                                voice_name=voice
+                            )
+                        )
+                    )
+                )
+            )
+            data = response.candidates[0].content.parts[0].inline_data.data
             if not data:
                 raise RuntimeError("No audio was received.")
             return data
         except Exception as e:
             last_err = e
+            err_s = str(e).lower()
             if attempt < retries - 1:
                 print(f"    ⚠️  TTS失敗({attempt+1}/{retries}): {e} — リトライ中...")
-                await _asyncio.sleep(3)
+                wait = 60 if ("429" in err_s or "rate" in err_s) else 5
+                await asyncio.sleep(wait)
     raise last_err
 
 async def process_audio(speech_lines: list, meanings: list, uid: str, tmpdir: str):
@@ -344,7 +357,7 @@ async def process_audio(speech_lines: list, meanings: list, uid: str, tmpdir: st
         clean_text = re.sub(r'\(|\)', '', line['text'])
         clean_text = re.sub(r'\+\+[^+]*\+\+', '', clean_text).strip()
         clean_text = re.sub(r'_([^_]+)_', r'\1', clean_text).strip()
-        voice = CONV_VOICES.get(line['speaker'], "en-US-BrianNeural")
+        voice = CONV_VOICES.get(line['speaker'], "Charon")
 
         s_data = await _tts_bytes(clean_text, voice)
         s_fn = f"s_{uid}_{idx}.mp3"
@@ -575,7 +588,6 @@ def main():
     current_dir = Path(__file__).parent.absolute()
     output_path = current_dir / "output"
     output_path.mkdir(parents=True, exist_ok=True)
-    client = genai.Client(api_key=GEMINI_API_KEY)
 
     print("📋 スプレッドシートから未処理フレーズを取得中...")
     try:
