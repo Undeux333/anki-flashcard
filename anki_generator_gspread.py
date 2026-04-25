@@ -4,6 +4,7 @@ from pathlib import Path
 from datetime import datetime
 from google import genai
 from google.genai import types
+import edge_tts
 import genanki
 import gspread
 from google.oauth2.service_account import Credentials
@@ -16,6 +17,7 @@ GEMINI_API_KEY   = os.environ.get("GEMINI_API_KEY", "")
 SPREADSHEET_ID   = os.environ.get("SPREADSHEET_ID", "")
 GOOGLE_CREDS_JSON = os.environ.get("GOOGLE_CREDENTIALS", "")
 GEMINI_MODEL     = "gemini-3.1-flash-lite-preview"
+TTS_RATE         = "+0%"
 
 # スプレッドシート列定義（1始まり）
 COL_INDEX        = 1  # A
@@ -36,12 +38,9 @@ ANKI_DECK_ID  = 2059400110
 FORCE_REGEN   = os.environ.get("FORCE_REGEN", "false").lower() == "true"
 
 CONV_VOICES = {
-    "A": "Charon",   # 男性
-    "B": "Zephyr",   # 女性
+    "A": "en-US-BrianNeural",
+    "B": "en-US-AvaMultilingualNeural",
 }
-
-# グローバルクライアント（_tts_bytes から参照するため）
-client = genai.Client(api_key=GEMINI_API_KEY)
 
 CARD_CSS = """
 .card { font-family: sans-serif; background: #1a1a1a; text-align: left; }
@@ -315,64 +314,24 @@ Return ONLY valid JSON:
             raise e
     raise RuntimeError("503 generate_content failed after all retries")
 
-def _audio_segment_from_gemini(data: bytes, mime_type: str) -> AudioSegment:
-    """Gemini TTSが返すmime_typeに応じてAudioSegmentを生成する"""
-    mt = mime_type.lower()
-    if "wav" in mt:
-        return AudioSegment.from_file(io.BytesIO(data), format="wav")
-    elif "mp3" in mt or "mpeg" in mt:
-        return AudioSegment.from_file(io.BytesIO(data), format="mp3")
-    elif "ogg" in mt:
-        return AudioSegment.from_file(io.BytesIO(data), format="ogg")
-    elif "l16" in mt or "pcm" in mt:
-        # audio/L16;codec=pcm;rate=24000 形式
-        rate = 24000
-        if "rate=" in mt:
-            try:
-                rate = int(mt.split("rate=")[1].split(";")[0].split(",")[0])
-            except Exception:
-                pass
-        return AudioSegment(data=data, sample_width=2, frame_rate=rate, channels=1)
-    else:
-        # 不明な場合は wav として試みる
-        try:
-            return AudioSegment.from_file(io.BytesIO(data), format="wav")
-        except Exception:
-            return AudioSegment.from_file(io.BytesIO(data), format="mp3")
-
-
 async def _tts_bytes(text, voice, retries=3):
-    """Gemini TTS で音声データと mime_type を返す"""
+    import asyncio as _asyncio
     last_err = None
     for attempt in range(retries):
         try:
-            response = client.models.generate_content(
-                model="gemini-3.1-flash-tts-preview",
-                contents=text,
-                config=types.GenerateContentConfig(
-                    response_modalities=["AUDIO"],
-                    speech_config=types.SpeechConfig(
-                        voice_config=types.VoiceConfig(
-                            prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                                voice_name=voice
-                            )
-                        )
-                    )
-                )
-            )
-            part = response.candidates[0].content.parts[0]
-            data = part.inline_data.data
-            mime_type = part.inline_data.mime_type or "audio/wav"
+            communicate = edge_tts.Communicate(text, voice=voice, rate=TTS_RATE)
+            data = b""
+            async for chunk in communicate.stream():
+                if chunk["type"] == "audio":
+                    data += chunk["data"]
             if not data:
                 raise RuntimeError("No audio was received.")
-            return data, mime_type
+            return data
         except Exception as e:
             last_err = e
-            err_s = str(e).lower()
             if attempt < retries - 1:
                 print(f"    ⚠️  TTS失敗({attempt+1}/{retries}): {e} — リトライ中...")
-                wait = 60 if ("429" in err_s or "rate" in err_s) else 5
-                await asyncio.sleep(wait)
+                await _asyncio.sleep(3)
     raise last_err
 
 async def process_audio(speech_lines: list, meanings: list, uid: str, tmpdir: str):
@@ -385,14 +344,14 @@ async def process_audio(speech_lines: list, meanings: list, uid: str, tmpdir: st
         clean_text = re.sub(r'\(|\)', '', line['text'])
         clean_text = re.sub(r'\+\+[^+]*\+\+', '', clean_text).strip()
         clean_text = re.sub(r'_([^_]+)_', r'\1', clean_text).strip()
-        voice = CONV_VOICES.get(line['speaker'], "Charon")
+        voice = CONV_VOICES.get(line['speaker'], "en-US-BrianNeural")
 
-        s_data, s_mime = await _tts_bytes(clean_text, voice)
+        s_data = await _tts_bytes(clean_text, voice)
         s_fn = f"s_{uid}_{idx}.mp3"
-        seg = _audio_segment_from_gemini(s_data, s_mime)
-        seg.export(str(Path(tmpdir) / s_fn), format="mp3")
+        (Path(tmpdir) / s_fn).write_bytes(s_data)
         s_files.append(s_fn)
 
+        seg = AudioSegment.from_file(io.BytesIO(s_data), format="mp3")
         trailing = AudioSegment.silent(duration=200) if idx < last_idx else AudioSegment.empty()
 
         if line['hidden']:
@@ -403,10 +362,9 @@ async def process_audio(speech_lines: list, meanings: list, uid: str, tmpdir: st
 
         back_audio += seg + trailing
 
-        m_data, m_mime = await _tts_bytes(meanings[idx], CONV_VOICES["B"])
+        m_data = await _tts_bytes(meanings[idx], CONV_VOICES["B"])
         m_fn = f"m_{uid}_{idx}.mp3"
-        m_seg = _audio_segment_from_gemini(m_data, m_mime)
-        m_seg.export(str(Path(tmpdir) / m_fn), format="mp3")
+        (Path(tmpdir) / m_fn).write_bytes(m_data)
         m_files.append(m_fn)
 
     f_fn = f"front_{uid}.mp3"
@@ -617,6 +575,7 @@ def main():
     current_dir = Path(__file__).parent.absolute()
     output_path = current_dir / "output"
     output_path.mkdir(parents=True, exist_ok=True)
+    client = genai.Client(api_key=GEMINI_API_KEY)
 
     print("📋 スプレッドシートから未処理フレーズを取得中...")
     try:
