@@ -315,8 +315,34 @@ Return ONLY valid JSON:
             raise e
     raise RuntimeError("503 generate_content failed after all retries")
 
+def _audio_segment_from_gemini(data: bytes, mime_type: str) -> AudioSegment:
+    """Gemini TTSが返すmime_typeに応じてAudioSegmentを生成する"""
+    mt = mime_type.lower()
+    if "wav" in mt:
+        return AudioSegment.from_file(io.BytesIO(data), format="wav")
+    elif "mp3" in mt or "mpeg" in mt:
+        return AudioSegment.from_file(io.BytesIO(data), format="mp3")
+    elif "ogg" in mt:
+        return AudioSegment.from_file(io.BytesIO(data), format="ogg")
+    elif "l16" in mt or "pcm" in mt:
+        # audio/L16;codec=pcm;rate=24000 形式
+        rate = 24000
+        if "rate=" in mt:
+            try:
+                rate = int(mt.split("rate=")[1].split(";")[0].split(",")[0])
+            except Exception:
+                pass
+        return AudioSegment(data=data, sample_width=2, frame_rate=rate, channels=1)
+    else:
+        # 不明な場合は wav として試みる
+        try:
+            return AudioSegment.from_file(io.BytesIO(data), format="wav")
+        except Exception:
+            return AudioSegment.from_file(io.BytesIO(data), format="mp3")
+
+
 async def _tts_bytes(text, voice, retries=3):
-    """Gemini TTS で音声データを生成して返す"""
+    """Gemini TTS で音声データと mime_type を返す"""
     last_err = None
     for attempt in range(retries):
         try:
@@ -334,10 +360,12 @@ async def _tts_bytes(text, voice, retries=3):
                     )
                 )
             )
-            data = response.candidates[0].content.parts[0].inline_data.data
+            part = response.candidates[0].content.parts[0]
+            data = part.inline_data.data
+            mime_type = part.inline_data.mime_type or "audio/wav"
             if not data:
                 raise RuntimeError("No audio was received.")
-            return data
+            return data, mime_type
         except Exception as e:
             last_err = e
             err_s = str(e).lower()
@@ -359,12 +387,12 @@ async def process_audio(speech_lines: list, meanings: list, uid: str, tmpdir: st
         clean_text = re.sub(r'_([^_]+)_', r'\1', clean_text).strip()
         voice = CONV_VOICES.get(line['speaker'], "Charon")
 
-        s_data = await _tts_bytes(clean_text, voice)
+        s_data, s_mime = await _tts_bytes(clean_text, voice)
         s_fn = f"s_{uid}_{idx}.mp3"
-        (Path(tmpdir) / s_fn).write_bytes(s_data)
+        seg = _audio_segment_from_gemini(s_data, s_mime)
+        seg.export(str(Path(tmpdir) / s_fn), format="mp3")
         s_files.append(s_fn)
 
-        seg = AudioSegment.from_file(io.BytesIO(s_data), format="mp3")
         trailing = AudioSegment.silent(duration=200) if idx < last_idx else AudioSegment.empty()
 
         if line['hidden']:
@@ -375,9 +403,10 @@ async def process_audio(speech_lines: list, meanings: list, uid: str, tmpdir: st
 
         back_audio += seg + trailing
 
-        m_data = await _tts_bytes(meanings[idx], CONV_VOICES["B"])
+        m_data, m_mime = await _tts_bytes(meanings[idx], CONV_VOICES["B"])
         m_fn = f"m_{uid}_{idx}.mp3"
-        (Path(tmpdir) / m_fn).write_bytes(m_data)
+        m_seg = _audio_segment_from_gemini(m_data, m_mime)
+        m_seg.export(str(Path(tmpdir) / m_fn), format="mp3")
         m_files.append(m_fn)
 
     f_fn = f"front_{uid}.mp3"
